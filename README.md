@@ -40,8 +40,8 @@ Interactive docs at `http://127.0.0.1:8000/docs`
 
 | Branch | Purpose |
 |--------|---------|
-| `main` | Production — stable, tested code only |
-| `dev` | Development — all PRs merge here |
+| `main` | Production: stable, tested code only |
+| `dev` | Development: all PRs merge here |
 | `Anthony` | Anthony's working branch |
 | `Vincent` | Vincent's working branch |
 
