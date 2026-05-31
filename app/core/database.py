@@ -3,7 +3,14 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy import text
 from app.core.config import settings
 
-engine = create_async_engine(settings.DATABASE_URL, echo=True)
+# Remove sslmode from URL and pass it as connect_args
+DATABASE_URL = settings.DATABASE_URL.replace("?sslmode=require", "")
+
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=True,
+    connect_args={"ssl": True}
+)
 
 AsyncSessionLocal = sessionmaker(
     bind=engine,
