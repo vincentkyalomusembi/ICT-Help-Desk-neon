@@ -1,0 +1,33 @@
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import text
+from app.core.config import settings
+
+# Remove sslmode from URL and pass it as connect_args
+DATABASE_URL = settings.DATABASE_URL.replace("?sslmode=require", "")
+
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=True,
+    connect_args={"ssl": True}
+)
+
+AsyncSessionLocal = sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
+
+Base = declarative_base()
+
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        yield session
+
+async def check_db_connection():
+    try:
+        async with engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
+        print("Database connected successfully")
+    except Exception as e:
+        print(f"Connection failed: {e}")
