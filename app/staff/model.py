@@ -1,8 +1,10 @@
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from typing import Optional, List, TYPE_CHECKING
 from datetime import datetime
+from uuid import UUID, uuid4
 import enum
 
 if TYPE_CHECKING:
@@ -45,10 +47,11 @@ class Department(SQLModel, table=True):
 class Staff(SQLModel, table=True):
     __tablename__ = "staff"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: UUID = Field(
+        sa_column=Column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    )
     personal_number: str = Field(max_length=20, unique=True, index=True)
     full_name: str = Field(max_length=100)
-    #national_id: str = Field(max_length=20, unique=True)
     email: str = Field(max_length=100, unique=True, index=True)
     phone_number: Optional[str] = Field(default=None, max_length=15)
     directorate_id: int = Field(foreign_key="directorates.id")

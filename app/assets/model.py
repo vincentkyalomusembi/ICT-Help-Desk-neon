@@ -3,11 +3,11 @@ from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from typing import Optional, List, TYPE_CHECKING
 from datetime import date, datetime
+from uuid import UUID  
 import enum
 
 if TYPE_CHECKING:
     from app.staff.model import Staff
-    #from app.ict_personnel.model import IctPersonnel
 
 
 class DeviceType(str, enum.Enum):
@@ -56,12 +56,10 @@ class AssetAllocation(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     asset_id: int = Field(foreign_key="assets.id")
-    staff_id: int = Field(foreign_key="staff.id")
-    #allocated_by_id: int = Field(foreign_key="ict_personnel.id")
+    staff_id: UUID = Field(foreign_key="staff.id")  
     allocation_date: date
     return_date: Optional[date] = Field(default=None)
     notes: Optional[str] = Field(default=None)
 
     asset: Optional["Asset"] = Relationship(back_populates="allocations")
     staff: Optional["Staff"] = Relationship(back_populates="asset_allocations")
-    #allocated_by: Optional["IctPersonnel"] = Relationship(back_populates="allocations_processed")

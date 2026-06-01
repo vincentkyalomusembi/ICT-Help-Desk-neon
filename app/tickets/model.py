@@ -3,6 +3,7 @@ from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from typing import Optional, TYPE_CHECKING
 from datetime import datetime
+from uuid import UUID  
 import enum
 
 if TYPE_CHECKING:
@@ -30,7 +31,7 @@ class Ticket(SQLModel, table=True):
     __tablename__ = "tickets"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    staff_id: int = Field(foreign_key="staff.id")
+    staff_id: UUID = Field(foreign_key="staff.id") 
     assigned_to_id: Optional[int] = Field(default=None, foreign_key="ict_personnel.id")
     title: str = Field(max_length=150)
     description: str

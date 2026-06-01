@@ -3,6 +3,7 @@ from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from typing import Optional, TYPE_CHECKING
 from datetime import datetime
+from uuid import UUID  
 import enum
 
 if TYPE_CHECKING:
@@ -29,7 +30,7 @@ class AuditLog(SQLModel, table=True):
     __tablename__ = "audit_logs"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    staff_id: Optional[int] = Field(default=None, foreign_key="staff.id")
+    staff_id: Optional[UUID] = Field(default=None, foreign_key="staff.id") 
     action: AuditAction
     table_name: str = Field(max_length=50, index=True)
     record_id: Optional[int] = Field(default=None)

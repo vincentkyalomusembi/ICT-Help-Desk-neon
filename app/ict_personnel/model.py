@@ -1,5 +1,6 @@
 from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, List, TYPE_CHECKING
+from uuid import UUID 
 import enum
 
 if TYPE_CHECKING:
@@ -27,7 +28,7 @@ class IctPersonnel(SQLModel, table=True):
     __tablename__ = "ict_personnel"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    staff_id: int = Field(foreign_key="staff.id", unique=True)
+    staff_id: UUID = Field(foreign_key="staff.id", unique=True) 
     specialization: Specialization = Field(default=Specialization.hardware)
     availability: Availability = Field(default=Availability.available)
     phone_extension: Optional[str] = Field(default=None, max_length=10)
