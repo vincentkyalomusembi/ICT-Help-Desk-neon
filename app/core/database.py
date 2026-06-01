@@ -3,7 +3,6 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy import text
 from app.core.config import settings
 
-# Remove sslmode from URL and pass it as connect_args
 DATABASE_URL = settings.DATABASE_URL.replace("?sslmode=require", "")
 
 engine = create_async_engine(
