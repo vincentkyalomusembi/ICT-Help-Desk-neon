@@ -1,8 +1,8 @@
-"""initial tables
+"""initial tables with uuid
 
-Revision ID: 7ac705a2c516
+Revision ID: 7fbaba2fc58b
 Revises: 
-Create Date: 2026-05-31 23:14:53.518101
+Create Date: 2026-06-01 13:02:15.474884
 
 """
 from typing import Sequence, Union
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 import sqlmodel
 
 # revision identifiers, used by Alembic.
-revision: str = '7ac705a2c516'
+revision: str = '7fbaba2fc58b'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -55,7 +55,7 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_departments_name'), 'departments', ['name'], unique=True)
     op.create_table('staff',
-    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('personal_number', sqlmodel.sql.sqltypes.AutoString(length=20), nullable=False),
     sa.Column('full_name', sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False),
     sa.Column('email', sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False),
@@ -79,7 +79,7 @@ def upgrade() -> None:
     op.create_table('asset_allocations',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('asset_id', sa.Integer(), nullable=False),
-    sa.Column('staff_id', sa.Integer(), nullable=False),
+    sa.Column('staff_id', sa.Uuid(), nullable=False),
     sa.Column('allocation_date', sa.Date(), nullable=False),
     sa.Column('return_date', sa.Date(), nullable=True),
     sa.Column('notes', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
@@ -89,7 +89,7 @@ def upgrade() -> None:
     )
     op.create_table('audit_logs',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('staff_id', sa.Integer(), nullable=True),
+    sa.Column('staff_id', sa.Uuid(), nullable=True),
     sa.Column('action', sa.Enum('TICKET_CREATED', 'TICKET_UPDATED', 'TICKET_ASSIGNED', 'TICKET_CLOSED', 'ASSET_ALLOCATED', 'ASSET_DEALLOCATED', 'USER_CREATED', 'USER_UPDATED', 'LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGOUT', 'PERMISSION_CHANGED', 'PASSWORD_RESET', name='auditaction'), nullable=False),
     sa.Column('table_name', sqlmodel.sql.sqltypes.AutoString(length=50), nullable=False),
     sa.Column('record_id', sa.Integer(), nullable=True),
@@ -102,7 +102,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_audit_logs_table_name'), 'audit_logs', ['table_name'], unique=False)
     op.create_table('ict_personnel',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('staff_id', sa.Integer(), nullable=False),
+    sa.Column('staff_id', sa.Uuid(), nullable=False),
     sa.Column('specialization', sa.Enum('hardware', 'networking', 'software_and_systems', 'security', 'other', name='specialization'), nullable=False),
     sa.Column('availability', sa.Enum('available', 'busy', 'off_duty', 'on_leave', name='availability'), nullable=False),
     sa.Column('phone_extension', sqlmodel.sql.sqltypes.AutoString(length=10), nullable=True),
@@ -113,7 +113,7 @@ def upgrade() -> None:
     )
     op.create_table('sessions',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('staff_id', sa.Integer(), nullable=False),
+    sa.Column('staff_id', sa.Uuid(), nullable=False),
     sa.Column('token', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('ip_address', sqlmodel.sql.sqltypes.AutoString(length=45), nullable=True),
     sa.Column('login_at', postgresql.TIMESTAMP(timezone=True), nullable=False),
@@ -125,7 +125,7 @@ def upgrade() -> None:
     )
     op.create_table('tickets',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('staff_id', sa.Integer(), nullable=False),
+    sa.Column('staff_id', sa.Uuid(), nullable=False),
     sa.Column('assigned_to_id', sa.Integer(), nullable=True),
     sa.Column('title', sqlmodel.sql.sqltypes.AutoString(length=150), nullable=False),
     sa.Column('description', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
