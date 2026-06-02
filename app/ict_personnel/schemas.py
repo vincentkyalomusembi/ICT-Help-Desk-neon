@@ -1,10 +1,12 @@
 from pydantic import BaseModel
 from typing import Optional
+from uuid import UUID
+
 from app.ict_personnel.model import Specialization, Availability
 
 
 class IctPersonnelCreate(BaseModel):
-    staff_id: int
+    staff_id: UUID
     specialization: Specialization
     availability: Availability = Availability.available
     phone_extension: Optional[str] = None
@@ -19,7 +21,7 @@ class IctPersonnelUpdate(BaseModel):
 
 class IctPersonnelResponse(BaseModel):
     id: int
-    staff_id: int
+    staff_id: UUID
     specialization: Specialization
     availability: Availability
     phone_extension: Optional[str]
