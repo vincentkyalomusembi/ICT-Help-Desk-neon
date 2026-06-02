@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from datetime import datetime, timedelta
 from typing import List, Optional
 from uuid import UUID
@@ -201,4 +200,3 @@ async def get_session(db: AsyncSession, token: str) -> Session | None:
         await db.commit()
         return None
     return session
->>>>>>> 82044ae7970d6f94ee46344820e86dfc52e8494d
