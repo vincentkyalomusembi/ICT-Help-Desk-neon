@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
 from app.staff.model import UserRole
+from uuid import UUID
 
 
 class DirectorateCreate(BaseModel):
@@ -58,7 +59,7 @@ class StaffUpdate(BaseModel):
 
 
 class StaffResponse(BaseModel):
-    id: int
+    id: UUID
     personal_number: str
     full_name: str
     email: str

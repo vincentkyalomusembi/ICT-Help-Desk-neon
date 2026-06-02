@@ -27,7 +27,7 @@ class TicketStatus(str, enum.Enum):
     closed = "CLOSED"
 
 
-class TicketStatus(SQLModel, table=True):
+class Ticket(SQLModel, table=True):
     __tablename__ = "tickets"
 
     id: Optional[int] = Field(default=None, primary_key=True)

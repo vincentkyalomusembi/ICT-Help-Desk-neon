@@ -1,3 +1,4 @@
+from __future__ import annotations
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import TIMESTAMP
