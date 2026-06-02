@@ -1,10 +1,12 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
-from app.tickets.model import TicketCategory, TicketStatus
+from .model import TicketCategory, TicketStatus
+from uuid import UUID
 
 
 class TicketCreate(BaseModel):
+    staff_id: UUID
     title: str
     description: str
     category: TicketCategory
@@ -20,7 +22,7 @@ class TicketUpdate(BaseModel):
 
 class TicketResponse(BaseModel):
     id: int
-    staff_id: int
+    staff_id: UUID
     assigned_to_id: Optional[int]
     title: str
     description: str
