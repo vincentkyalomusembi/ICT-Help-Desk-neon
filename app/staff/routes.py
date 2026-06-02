@@ -4,18 +4,16 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db  
+from app.core.database import get_db
 from app.core.dependencies import get_current_staff
 from app.staff.model import Staff, UserRole
 from app.staff.schemas import StaffCreate, StaffResponse, StaffUpdate, PasswordChangeRequest
-from app.staff.service import StaffService  
+from app.staff.service import StaffService
 
 router = APIRouter(prefix="/staff", tags=["Staff"])
 
-# --- Permission Helpers ---
 
 def require_admin(current: Staff = Depends(get_current_staff)) -> Staff:
-    """Dependency to restrict access to admins only."""
     if current.role != UserRole.admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -24,14 +22,12 @@ def require_admin(current: Staff = Depends(get_current_staff)) -> Staff:
     return current
 
 
-def verify_admin_or_self(staff_id: UUID, current: Staff) -> Staff:
-    """Utility function to check if user is admin or accessing their own data."""
+def verify_admin_or_self(staff_id: UUID, current: Staff) -> None:
     if current.role != UserRole.admin and current.id != staff_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only access your own record.",
         )
-    return current
 
 
 # --- Routes ---
@@ -40,12 +36,11 @@ def verify_admin_or_self(staff_id: UUID, current: Staff) -> Staff:
     "/",
     response_model=StaffResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Register a new staff member (admin only)",
+    summary="Register a new staff member (open)",
 )
 async def create_staff(
     payload: StaffCreate,
     session: AsyncSession = Depends(get_db),
-    _: Staff = Depends(require_admin),
 ):
     service = StaffService(session)
     return await service.create_staff(payload)
@@ -85,14 +80,13 @@ async def get_me(current: Staff = Depends(get_current_staff)):
 @router.get(
     "/{staff_id}",
     response_model=StaffResponse,
-    summary="Get a staff member by ID (admin or self)",
+    summary="Get a staff member by ID (admin only)",
 )
 async def get_staff(
     staff_id: UUID,
     session: AsyncSession = Depends(get_db),
-    current: Staff = Depends(get_current_staff),
+    _: Staff = Depends(require_admin),
 ):
-    verify_admin_or_self(staff_id, current)
     service = StaffService(session)
     return await service.get_staff_by_id(staff_id)
 
@@ -100,7 +94,7 @@ async def get_staff(
 @router.patch(
     "/{staff_id}",
     response_model=StaffResponse,
-    summary="Update a staff member (admin or self — role change is admin only)",
+    summary="Update a staff member (admin or self, role change is admin only)",
 )
 async def update_staff(
     staff_id: UUID,
