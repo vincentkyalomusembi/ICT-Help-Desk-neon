@@ -6,7 +6,6 @@ import re
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
 
-# Read DSN from settings (can be None in local/no-DB mode)
 raw = settings.DATABASE_URL
 
 engine = None
@@ -15,7 +14,6 @@ Base = None
 DATABASE_URL = None
 
 if raw:
-    # normalize driver to asyncpg and remove problematic query params
     normalized = re.sub(r"^postgresql:", "postgresql+asyncpg:", raw)
     p = urlparse(normalized)
     qs = dict(parse_qsl(p.query))
