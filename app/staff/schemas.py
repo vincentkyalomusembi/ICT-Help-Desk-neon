@@ -72,3 +72,6 @@ class StaffResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class PasswordChangeRequest(BaseModel):
+    new_password: str
