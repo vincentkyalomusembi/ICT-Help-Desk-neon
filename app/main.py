@@ -17,7 +17,7 @@ app.include_router(auth_router)
 app.include_router(assets_router)
 app.include_router(staff_router)
 app.include_router(audit_router)
-app.inlude_router(tickets_router)
+app.include_router(tickets_router)
 @app.get("/")
 async def home():
     return {"message": "ICT Helpdesk API"}

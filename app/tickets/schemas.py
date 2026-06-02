@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from sqlmodel import SQLModel
 from .model import TicketCategory, TicketStatus
 from uuid import UUID
 
@@ -19,6 +20,15 @@ class TicketUpdate(BaseModel):
     status: Optional[TicketStatus] = None
     assigned_to_id: Optional[int] = None
 
+class TicketRead(BaseModel):
+    """Response schema for reading tickets."""
+    id: int
+    title: str
+    description: str
+    status: str
+    category: str
+    created_at: datetime
+    updated_at: datetime
 
 class TicketResponse(BaseModel):
     id: int
