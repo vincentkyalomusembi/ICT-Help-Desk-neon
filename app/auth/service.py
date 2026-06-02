@@ -1,3 +1,7 @@
+"""
+app/sessions/service.py
+"""
+
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 from uuid import UUID
@@ -10,9 +14,10 @@ from app.auth.schemas import LoginRequest
 from app.staff.model import Staff
 from app.staff import service as staff_service
 from app.core.security import verify_password, generate_session_token
+from app.core.config import settings
 
-SESSION_DURATION_HOURS = 8
 
+#helpers 
 
 def _get_client_ip(request: Request) -> Optional[str]:
     forwarded_for = request.headers.get("X-Forwarded-For")
@@ -21,14 +26,18 @@ def _get_client_ip(request: Request) -> Optional[str]:
     return request.client.host if request.client else None
 
 
+#login 
 
 def login(db: Session, payload: LoginRequest, request: Request) -> DBSession:
+    # 1. Find staff by email
     staff = staff_service.get_staff_by_email(db, payload.email)
     if not staff:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password.",
         )
+
+    
     if staff_service.is_account_locked(staff):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -48,14 +57,16 @@ def login(db: Session, payload: LoginRequest, request: Request) -> DBSession:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=detail,
         )
+
     staff_service.reset_failed_attempts(db, staff)
+
     now = datetime.now(timezone.utc)
     session = DBSession(
         staff_id=staff.id,
         token=generate_session_token(),
         ip_address=_get_client_ip(request),
         login_at=now,
-        expires_at=now + timedelta(hours=SESSION_DURATION_HOURS),
+        expires_at=now + timedelta(hours=settings.SESSION_DURATION_HOURS),
         is_active=True,
     )
     db.add(session)
@@ -63,6 +74,8 @@ def login(db: Session, payload: LoginRequest, request: Request) -> DBSession:
     db.refresh(session)
     return session
 
+
+#logout 
 
 def logout(db: Session, token: str) -> None:
     session = db.exec(
@@ -97,6 +110,7 @@ def logout_all(db: Session, staff_id: UUID) -> int:
     return len(sessions)
 
 
+#queries 
 def list_active_sessions(db: Session, staff_id: UUID) -> list[DBSession]:
     now = datetime.now(timezone.utc)
     return list(
@@ -123,7 +137,7 @@ def list_all_sessions(
         stmt = stmt.where(DBSession.staff_id == staff_id)
     if active_only:
         stmt = stmt.where(
-            DBSession.is_active == True,  # noqa: E712
+            DBSession.is_active == True,  
             DBSession.expires_at > datetime.now(timezone.utc),
         )
     stmt = stmt.order_by(DBSession.login_at.desc()).offset(skip).limit(limit)
