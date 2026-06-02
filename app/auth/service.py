@@ -101,7 +101,7 @@ class AuthService:
 
 
 auth_service = AuthService()
-=======
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlmodel import SQLModel
