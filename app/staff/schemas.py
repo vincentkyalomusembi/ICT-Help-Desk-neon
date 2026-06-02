@@ -1,9 +1,11 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, model_validator
 from typing import Optional
 from datetime import datetime
-from app.staff.model import UserRole
 from uuid import UUID
+from app.staff.model import UserRole
 
+
+#Directorate 
 
 class DirectorateCreate(BaseModel):
     name: str
@@ -18,6 +20,8 @@ class DirectorateResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+#Department 
 
 class DepartmentCreate(BaseModel):
     directorate_id: int
@@ -35,6 +39,8 @@ class DepartmentResponse(BaseModel):
         from_attributes = True
 
 
+#Staff 
+
 class StaffCreate(BaseModel):
     personal_number: str
     full_name: str
@@ -46,6 +52,13 @@ class StaffCreate(BaseModel):
     office_location: Optional[str] = None
     role: UserRole = UserRole.staff
     password: str
+    confirm_password: str
+
+    @model_validator(mode="after")
+    def passwords_match(self) -> "StaffCreate":
+        if self.password != self.confirm_password:
+            raise ValueError("password and confirm_password do not match.")
+        return self
 
 
 class StaffUpdate(BaseModel):
@@ -74,5 +87,16 @@ class StaffResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+#Password 
+
 class PasswordChangeRequest(BaseModel):
+    current_password: str          # must supply old password to change it
     new_password: str
+    confirm_new_password: str
+
+    @model_validator(mode="after")
+    def new_passwords_match(self) -> "PasswordChangeRequest":
+        if self.new_password != self.confirm_new_password:
+            raise ValueError("new_password and confirm_new_password do not match.")
+        return self
