@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from app.core.database import check_db_connection
 from app.assets.routes import router as assets_router
 from app.auth.routes import router as auth_router
-from app.auth.routes import router as staff_router
+from app.staff.routes import router as staff_router
 from app.audit.routes import router as audit_router
 
 

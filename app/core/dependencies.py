@@ -1,20 +1,18 @@
 from datetime import datetime, timezone
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
-from sqlmodel import Session, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-from app.core.database import get_session          
-from app.auth.model import Session as DBSession 
+from app.core.database import get_db
+from app.auth.model import Session as DBSession
 from app.staff.model import Staff, UserRole
 
 
 def _extract_token(request: Request) -> str:
-    """
-    Pull the bearer token from the Authorization header.
-
-    Raises 401 if the header is missing or malformed.
-    """
+    """Extract bearer token from Authorization header."""
     auth_header: str = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(
@@ -25,15 +23,12 @@ def _extract_token(request: Request) -> str:
     return auth_header[len("Bearer "):]
 
 
-def _resolve_session(token: str, db: Session) -> DBSession:
-    """
-    Look up the session row, validate it is active and not expired.
-
-    Raises 401 on any failure so callers never have to think about it.
-    """
-    db_session = db.exec(
+async def _resolve_session(token: str, db: AsyncSession) -> DBSession:
+    """Look up and validate the session."""
+    result = await db.execute(
         select(DBSession).where(DBSession.token == token)
-    ).first()
+    )
+    db_session = result.scalar_one_or_none()
 
     if db_session is None:
         raise HTTPException(
@@ -51,8 +46,7 @@ def _resolve_session(token: str, db: Session) -> DBSession:
 
     if datetime.now(timezone.utc) >= db_session.expires_at:
         db_session.is_active = False
-        db.add(db_session)
-        db.commit()
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session has expired. Please log in again.",
@@ -62,21 +56,25 @@ def _resolve_session(token: str, db: Session) -> DBSession:
     return db_session
 
 
-def get_current_session(
+async def get_current_session(
     request: Request,
-    db: Session = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ) -> DBSession:
-    """Dependency → validated DBSession row."""
+    """Dependency that returns validated session."""
     token = _extract_token(request)
-    return _resolve_session(token, db)
+    return await _resolve_session(token, db)
 
 
-def get_current_staff(
+async def get_current_staff(
     db_session: DBSession = Depends(get_current_session),
-    db: Session = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ) -> Staff:
-    """Dependency → the Staff record that owns the current session."""
-    staff = db.get(Staff, db_session.staff_id)
+    """Dependency that returns the current authenticated staff member."""
+    result = await db.execute(
+        select(Staff).where(Staff.id == db_session.staff_id)
+    )
+    staff = result.scalar_one_or_none()
+    
     if staff is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -85,18 +83,11 @@ def get_current_staff(
     return staff
 
 
-def get_current_active_staff(
+async def get_current_active_staff(
     current: Staff = Depends(get_current_staff),
 ) -> Staff:
-    """
-    Dependency → Staff that is not locked.
-
-    Use this on any endpoint where a locked account must be blocked
-    even if their token is still technically valid.
-    """
-    from app.core.security import utc_now  
-
-    if current.locked_until and utc_now() < current.locked_until:
+    """Dependency that ensures the staff account is not locked."""
+    if current.locked_until and datetime.now(timezone.utc) < current.locked_until:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Account is locked until {current.locked_until.isoformat()}.",
@@ -104,10 +95,10 @@ def get_current_active_staff(
     return current
 
 
-def require_admin(
+async def require_admin(
     current: Staff = Depends(get_current_active_staff),
 ) -> Staff:
-    """Dependency → Staff with admin role."""
+    """Dependency that requires admin role."""
     if current.role != UserRole.admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -116,10 +107,10 @@ def require_admin(
     return current
 
 
-def require_ict(
+async def require_ict(
     current: Staff = Depends(get_current_active_staff),
 ) -> Staff:
-    """Dependency → Staff with ict_personnel (or admin) role."""
+    """Dependency that requires ICT personnel or admin role."""
     if current.role not in {UserRole.ict_personnel, UserRole.admin}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -128,6 +119,7 @@ def require_ict(
     return current
 
 
+# Type aliases for easier use in route parameters
 CurrentStaff = Annotated[Staff, Depends(get_current_active_staff)]
-AdminStaff   = Annotated[Staff, Depends(require_admin)]
-IctStaff     = Annotated[Staff, Depends(require_ict)]
+AdminStaff = Annotated[Staff, Depends(require_admin)]
+IctStaff = Annotated[Staff, Depends(require_ict)]
