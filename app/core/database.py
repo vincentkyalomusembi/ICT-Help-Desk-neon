@@ -1,36 +1,56 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy import text
-from sqlalchemy.engine import make_url
 from app.core.config import settings
+import re
+from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
-raw_database_url = settings.DATABASE_URL.replace("?sslmode=require", "")
-parsed_url = make_url(raw_database_url)
 
-if parsed_url.drivername == "postgresql":
-    parsed_url = parsed_url.set(drivername="postgresql+asyncpg")
+# Read DSN from settings (can be None in local/no-DB mode)
+raw = settings.DATABASE_URL
 
-DATABASE_URL = str(parsed_url)
+engine = None
+AsyncSessionLocal = None
+Base = None
+DATABASE_URL = None
 
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=True,
-    connect_args={"ssl": "require"}
-)
+if raw:
+    # normalize driver to asyncpg and remove problematic query params
+    normalized = re.sub(r"^postgresql:", "postgresql+asyncpg:", raw)
+    p = urlparse(normalized)
+    qs = dict(parse_qsl(p.query))
+    qs.pop("sslmode", None)
+    qs.pop("channel_binding", None)
+    clean = urlunparse(p._replace(query=urlencode(qs)))
 
-AsyncSessionLocal = sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False
-)
+    DATABASE_URL = clean
 
-Base = declarative_base()
+    engine = create_async_engine(
+        DATABASE_URL,
+        echo=True,
+        connect_args={"ssl": "require"}
+    )
+
+    AsyncSessionLocal = sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False
+    )
+
+    Base = declarative_base()
+
 
 async def get_db():
+    if AsyncSessionLocal is None:
+        raise RuntimeError("Database is not configured. Set DATABASE_URL in .env")
     async with AsyncSessionLocal() as session:
         yield session
 
+
 async def check_db_connection():
+    if engine is None:
+        print("Database is not configured. Skipping connection check")
+        return
     try:
         async with engine.connect() as connection:
             await connection.execute(text("SELECT 1"))
