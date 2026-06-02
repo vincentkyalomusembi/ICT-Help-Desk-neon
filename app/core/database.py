@@ -5,7 +5,6 @@ from app.core.config import settings
 import re
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
-
 raw = settings.DATABASE_URL
 
 engine = None
@@ -15,11 +14,16 @@ DATABASE_URL = None
 
 if raw:
     normalized = re.sub(r"^postgresql:", "postgresql+asyncpg:", raw)
+
     p = urlparse(normalized)
+
     qs = dict(parse_qsl(p.query))
     qs.pop("sslmode", None)
     qs.pop("channel_binding", None)
-    clean = urlunparse(p._replace(query=urlencode(qs)))
+
+    clean = urlunparse(
+        p._replace(query=urlencode(qs))
+    )
 
     DATABASE_URL = clean
 
@@ -40,7 +44,10 @@ if raw:
 
 async def get_db():
     if AsyncSessionLocal is None:
-        raise RuntimeError("Database is not configured. Set DATABASE_URL in .env")
+        raise RuntimeError(
+            "Database is not configured. Set DATABASE_URL in .env"
+        )
+
     async with AsyncSessionLocal() as session:
         yield session
 
@@ -49,9 +56,12 @@ async def check_db_connection():
     if engine is None:
         print("Database is not configured. Skipping connection check")
         return
+
     try:
         async with engine.connect() as connection:
             await connection.execute(text("SELECT 1"))
+
         print("Database connected successfully")
+
     except Exception as e:
         print(f"Connection failed: {e}")
