@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query, status, HTTPException
 from sqlmodel import Session
 
-from app.core.database import get_session
+from app.auth.model import get_session
 from app.core.dependencies import get_current_staff
 from app.staff.model import Staff, UserRole
 from app.staff.schemas import StaffCreate, StaffResponse, StaffUpdate, PasswordChangeRequest

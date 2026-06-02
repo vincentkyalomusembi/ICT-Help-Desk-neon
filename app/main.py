@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.core.database import check_db_connection
 from app.assets.routes import router as assets_router
 from app.auth.routes import router as auth_router
+from app.auth.routes import router as staff_router
 
 
 @asynccontextmanager
@@ -13,7 +14,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(assets_router)
-
+app.include_router(staff_router)
 
 @app.get("/")
 async def home():
