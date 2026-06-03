@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.security import verify_password, generate_session_token
 
 
-# ── Helpers ───────────────────────────────────────────────────
+#Helpers 
 
 def _get_client_ip(request: Request) -> Optional[str]:
     forwarded_for = request.headers.get("X-Forwarded-For")
@@ -22,9 +22,9 @@ def _get_client_ip(request: Request) -> Optional[str]:
     return request.client.host if request.client else None
 
 
-# ── Login ─────────────────────────────────────────────────────
+#Login 
 
-async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> DBSession:
+async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> dict:
     result = await db.execute(select(Staff).where(Staff.email == payload.email))
     staff = result.scalar_one_or_none()
 
@@ -66,16 +66,23 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> DB
         token=generate_session_token(),
         ip_address=_get_client_ip(request),
         login_at=now,
-        expires_at=now + timedelta(minutes=settings.SESSION_EXPIRE_MINUTES),
+        expires_at=now + timedelta(hours=settings.SESSION_DURATION_HOURS),
         is_active=True,
     )
     db.add(session)
     await db.commit()
     await db.refresh(session)
-    return session
+
+    return {
+        "message": "Login successful.",
+        "staff_id": staff.id,
+        "role": staff.role.value,
+        "token": session.token,
+        "expires_at": session.expires_at,
+    }
 
 
-# ── Logout ────────────────────────────────────────────────────
+#Logout 
 
 async def logout(db: AsyncSession, token: str) -> None:
     result = await db.execute(select(DBSession).where(DBSession.token == token))
@@ -109,7 +116,7 @@ async def logout_all(db: AsyncSession, staff_id: UUID) -> int:
     return len(sessions)
 
 
-# ── Queries ───────────────────────────────────────────────────
+#Queries 
 
 async def list_active_sessions(db: AsyncSession, staff_id: UUID) -> list[DBSession]:
     now = datetime.now(timezone.utc)
