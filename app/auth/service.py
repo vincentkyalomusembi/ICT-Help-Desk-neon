@@ -1,23 +1,19 @@
-"""
-app/sessions/service.py
-"""
-
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException, Request, status
-from sqlmodel import Session, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 
 from app.auth.model import Session as DBSession
 from app.auth.schemas import LoginRequest
 from app.staff.model import Staff
-from app.staff import service as staff_service
-from app.core.security import verify_password, generate_session_token
 from app.core.config import settings
+from app.core.security import verify_password, generate_session_token
 
 
-#helpers 
+# ── Helpers ───────────────────────────────────────────────────
 
 def _get_client_ip(request: Request) -> Optional[str]:
     forwarded_for = request.headers.get("X-Forwarded-For")
@@ -26,27 +22,29 @@ def _get_client_ip(request: Request) -> Optional[str]:
     return request.client.host if request.client else None
 
 
-#login 
+# ── Login ─────────────────────────────────────────────────────
 
-def login(db: Session, payload: LoginRequest, request: Request) -> DBSession:
-    # 1. Find staff by email
-    staff = staff_service.get_staff_by_email(db, payload.email)
+async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> DBSession:
+    result = await db.execute(select(Staff).where(Staff.email == payload.email))
+    staff = result.scalar_one_or_none()
+
     if not staff:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password.",
         )
 
-    
-    if staff_service.is_account_locked(staff):
+    if staff.locked_until and staff.locked_until > datetime.now(timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Account is locked until {staff.locked_until.isoformat()}. "
-                   "Please contact an administrator.",
+            detail=f"Account is locked until {staff.locked_until.isoformat()}. Please contact an administrator.",
         )
 
     if not verify_password(payload.password, staff.password_hash):
-        staff_service.record_failed_attempt(db, staff)
+        staff.failed_attempts += 1
+        if staff.failed_attempts >= 5:
+            staff.locked_until = datetime.now(timezone.utc) + timedelta(minutes=30)
+        await db.commit()
         remaining = max(0, 5 - staff.failed_attempts)
         detail = (
             f"Invalid email or password. {remaining} attempt(s) remaining before lockout."
@@ -58,7 +56,9 @@ def login(db: Session, payload: LoginRequest, request: Request) -> DBSession:
             detail=detail,
         )
 
-    staff_service.reset_failed_attempts(db, staff)
+    staff.failed_attempts = 0
+    staff.locked_until = None
+    await db.commit()
 
     now = datetime.now(timezone.utc)
     session = DBSession(
@@ -70,17 +70,16 @@ def login(db: Session, payload: LoginRequest, request: Request) -> DBSession:
         is_active=True,
     )
     db.add(session)
-    db.commit()
-    db.refresh(session)
+    await db.commit()
+    await db.refresh(session)
     return session
 
 
-#logout 
+# ── Logout ────────────────────────────────────────────────────
 
-def logout(db: Session, token: str) -> None:
-    session = db.exec(
-        select(DBSession).where(DBSession.token == token)
-    ).first()
+async def logout(db: AsyncSession, token: str) -> None:
+    result = await db.execute(select(DBSession).where(DBSession.token == token))
+    session = result.scalar_one_or_none()
 
     if not session or not session.is_active:
         raise HTTPException(
@@ -90,43 +89,42 @@ def logout(db: Session, token: str) -> None:
 
     session.is_active = False
     db.add(session)
-    db.commit()
+    await db.commit()
 
 
-def logout_all(db: Session, staff_id: UUID) -> int:
-    """Invalidate every active session for a staff member. Returns count closed."""
-    sessions = db.exec(
+async def logout_all(db: AsyncSession, staff_id: UUID) -> int:
+    result = await db.execute(
         select(DBSession).where(
             DBSession.staff_id == staff_id,
-            DBSession.is_active == True,  
+            DBSession.is_active == True,
         )
-    ).all()
+    )
+    sessions = result.scalars().all()
 
     for s in sessions:
         s.is_active = False
         db.add(s)
 
-    db.commit()
+    await db.commit()
     return len(sessions)
 
 
-#queries 
-def list_active_sessions(db: Session, staff_id: UUID) -> list[DBSession]:
+# ── Queries ───────────────────────────────────────────────────
+
+async def list_active_sessions(db: AsyncSession, staff_id: UUID) -> list[DBSession]:
     now = datetime.now(timezone.utc)
-    return list(
-        db.exec(
-            select(DBSession).where(
-                DBSession.staff_id == staff_id,
-                DBSession.is_active == True,  
-                DBSession.expires_at > now,
-            )
-        ).all()
+    result = await db.execute(
+        select(DBSession).where(
+            DBSession.staff_id == staff_id,
+            DBSession.is_active == True,
+            DBSession.expires_at > now,
+        )
     )
+    return result.scalars().all()
 
 
-def list_all_sessions(
-    db: Session,
-    *,
+async def list_all_sessions(
+    db: AsyncSession,
     skip: int = 0,
     limit: int = 50,
     staff_id: Optional[UUID] = None,
@@ -137,8 +135,9 @@ def list_all_sessions(
         stmt = stmt.where(DBSession.staff_id == staff_id)
     if active_only:
         stmt = stmt.where(
-            DBSession.is_active == True,  
+            DBSession.is_active == True,
             DBSession.expires_at > datetime.now(timezone.utc),
         )
     stmt = stmt.order_by(DBSession.login_at.desc()).offset(skip).limit(limit)
-    return list(db.exec(stmt).all())
+    result = await db.execute(stmt)
+    return result.scalars().all()
