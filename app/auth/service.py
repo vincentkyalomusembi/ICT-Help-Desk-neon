@@ -66,7 +66,7 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
         token=generate_session_token(),
         ip_address=_get_client_ip(request),
         login_at=now,
-        expires_at=now + timedelta(hours=settings.SESSION_DURATION_HOURS),
+        expires_at=now + timedelta(minutes=settings.SESSION_EXPIRE_MINUTES),
         is_active=True,
     )
     db.add(session)
