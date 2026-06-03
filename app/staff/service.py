@@ -1,13 +1,14 @@
 from uuid import UUID
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from fastapi import HTTPException, status
 
 from app.staff.model import Staff
 from app.staff.schemas import StaffCreate, StaffUpdate
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 
 
 class StaffService:
@@ -40,7 +41,6 @@ class StaffService:
                 detail=f"A staff member with {field_name} '{value}' already exists.",
             )
 
-    
     async def create_staff(self, payload: StaffCreate) -> Staff:
         await self._assert_unique_field("personal_number", payload.personal_number)
         await self._assert_unique_field("email", payload.email)
@@ -97,8 +97,7 @@ class StaffService:
 
     async def update_staff(self, staff_id: UUID, payload: StaffUpdate) -> Staff:
         staff = await self._get_or_404(staff_id)
-        updates = payload.model_dump(exclude_unset=True)
-        for field, value in updates.items():
+        for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(staff, field, value)
         self.session.add(staff)
         await self.session.commit()
@@ -110,7 +109,6 @@ class StaffService:
         await self.session.delete(staff)
         await self.session.commit()
 
-   
     async def change_password(self, staff_id: UUID, new_password: str) -> Staff:
         staff = await self._get_or_404(staff_id)
         staff.password_hash = hash_password(new_password)
