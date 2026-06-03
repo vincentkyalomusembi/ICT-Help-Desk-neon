@@ -44,12 +44,8 @@ class AssetResponse(BaseModel):
 
 class AssetAllocationCreate(BaseModel):
     asset_id: int
-<<<<<<< HEAD
-    staff_id: int
-=======
     staff_id: UUID
     allocated_by_id: int
->>>>>>> 932b3d7 (fixed the typo annotaion in asset/schema.py)
     allocation_date: date
     notes: Optional[str] = None
 
@@ -62,12 +58,8 @@ class AssetAllocationUpdate(BaseModel):
 class AssetAllocationResponse(BaseModel):
     id: int
     asset_id: int
-<<<<<<< HEAD
-    staff_id: int
-=======
     staff_id: UUID
     allocated_by_id: int
->>>>>>> 932b3d7 (fixed the typo annotaion in asset/schema.py)
     allocation_date: date
     return_date: Optional[date]
     notes: Optional[str]
