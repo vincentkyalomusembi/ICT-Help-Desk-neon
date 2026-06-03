@@ -5,11 +5,10 @@ from uuid import UUID
 from app.ict_personnel.model import Specialization, Availability
 
 
-class IctPersonnelCreate(BaseModel):
-    staff_id: UUID
-    specialization: Specialization
-    availability: Availability = Availability.available
+class IctPersonnelUpdate(BaseModel):
+    specialization: Optional[Specialization] = None
     phone_extension: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 class IctPersonnelUpdate(BaseModel):
