@@ -197,6 +197,6 @@ async def get_session(db: AsyncSession, token: str) -> Session | None:
         return None
     if session.expires_at < datetime.utcnow():
         session.is_active = False
-        await db.commit()
-        return None
+        await db.commit()        
+        return None     
     return session
