@@ -24,7 +24,6 @@ class TicketStatus(str, enum.Enum):
     open = "OPEN"
     in_progress = "IN_PROGRESS"
     resolved = "RESOLVED"
-    closed = "CLOSED"
 
 
 class Ticket(SQLModel, table=True):
@@ -33,7 +32,6 @@ class Ticket(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     staff_id: UUID = Field(foreign_key="staff.id") 
     assigned_to_id: Optional[int] = Field(default=None, foreign_key="ict_personnel.id")
-    title: str = Field(max_length=150)
     description: str
     category: TicketCategory
     status: TicketStatus = Field(default=TicketStatus.open)

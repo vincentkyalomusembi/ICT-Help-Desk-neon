@@ -13,7 +13,6 @@ class TicketCreate(BaseModel):
 
 
 class TicketUpdate(BaseModel):
-    title: Optional[str] = None
     description: Optional[str] = None
     category: Optional[TicketCategory] = None
     status: Optional[TicketStatus] = None
