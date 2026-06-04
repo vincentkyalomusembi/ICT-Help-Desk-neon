@@ -7,15 +7,16 @@ from uuid import UUID
 
 if TYPE_CHECKING:
     from app.staff.model import Staff
+    from app.audit.model import AuditLog
 
 
 class Session(SQLModel, table=True):
     __tablename__ = "sessions"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    staff_id: UUID = Field(foreign_key="staff.id") 
+    staff_id: UUID = Field(foreign_key="staff.id")
     token: str = Field(unique=True)
-    ip_address: Optional[str] = Field(default=None, max_length=45)
+    ip_address: Optional[str] = Field(default=None, max_length=45)  # ✅ remove unique=True
     login_at: datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
     )
@@ -25,3 +26,4 @@ class Session(SQLModel, table=True):
     is_active: bool = Field(default=True)
 
     staff: Optional["Staff"] = Relationship(back_populates="sessions")
+    audit_logs: list["AuditLog"] = Relationship(back_populates="session")
