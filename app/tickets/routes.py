@@ -27,7 +27,7 @@ async def read(ticket_id: int, session: AsyncSession = Depends(get_db)):
     return ticket
 
 
-@router.put("/{ticket_id}", response_model=TicketResponse)
+@router.patch("/{ticket_id}", response_model=TicketResponse)
 async def update(ticket_id: int, ticket: TicketUpdate, session: AsyncSession = Depends(get_db)):
     updated = await update_ticket(session, ticket_id, ticket)
     if not updated:
