@@ -20,8 +20,12 @@ app = FastAPI(lifespan=lifespan, redirect_slashes=False)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=[
+        "http://localhost:3000",    # React default
+        "http://localhost:5173",    # Vite default
+        "https://ict-help-desk-frontend.vercel.app/",  # Production URL
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
