@@ -9,11 +9,12 @@ from app.core.dependencies import get_current_staff
 from app.staff.model import Staff, UserRole
 from app.auth.schemas import LoginRequest, LoginResponse, LogoutRequest, SessionResponse
 from app.auth import service
+from app.auth.magic import verify_magic_token, resend_magic_token
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-#Permission Helpers 
+# Permission Helpers
 
 def require_admin(current: Staff = Depends(get_current_staff)) -> Staff:
     if current.role != UserRole.admin:
@@ -24,7 +25,7 @@ def require_admin(current: Staff = Depends(get_current_staff)) -> Staff:
     return current
 
 
-#Routes
+# Routes
 
 @router.post(
     "/login",
@@ -111,3 +112,29 @@ async def force_logout(
 ):
     count = await service.logout_all(db, staff_id)
     return {"message": f"{count} session(s) terminated for staff {staff_id}."}
+
+
+@router.get(
+    "/verify",
+    status_code=status.HTTP_200_OK,
+    summary="Verify magic link token from email",
+)
+async def verify_email(
+    token: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    await verify_magic_token(db, token)
+    return {"message": "Email verified successfully. You can now log in."}
+
+
+@router.post(
+    "/resend-verification",
+    status_code=status.HTTP_200_OK,
+    summary="Resend magic link verification email",
+)
+async def resend_verification(
+    email: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    await resend_magic_token(db, email)
+    return {"message": "Verification email resent. Please check your inbox."}

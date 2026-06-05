@@ -68,6 +68,7 @@ class Staff(SQLModel, table=True):
     password_changed_at: datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
     )
+    is_activated: bool = Field(default=False)
     created_at: datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
     )
