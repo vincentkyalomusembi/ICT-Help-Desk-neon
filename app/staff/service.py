@@ -2,6 +2,10 @@ from uuid import UUID
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+from uuid import UUID
+from datetime import datetime, timezone, timedelta
+from typing import Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from fastapi import HTTPException, status
@@ -13,13 +17,14 @@ from app.staff.schemas import (
     DepartmentCreate, DepartmentUpdate,
 )
 from app.core.security import hash_password, verify_password
-
+from app.auth.magic import create_magic_token
+from app.core.email import send_magic_link
 
 class StaffService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    # ── Staff helpers ─────────────────────────────────────────
+    #Staff helpers
 
     async def _get_or_404(self, staff_id: UUID) -> Staff:
         staff = await self.session.get(Staff, staff_id)
@@ -47,7 +52,7 @@ class StaffService:
                 detail=f"A staff member with {field_name} '{value}' already exists.",
             )
 
-    # ── Directorate helpers ───────────────────────────────────
+    #Directorate helpers 
 
     async def _get_directorate_or_404(self, directorate_id: int) -> Directorate:
         obj = await self.session.get(Directorate, directorate_id)
@@ -71,7 +76,7 @@ class StaffService:
                 detail=f"Directorate with name '{name}' already exists.",
             )
 
-    # ── Department helpers ────────────────────────────────────
+    #Department helpers 
 
     async def _get_department_or_404(self, department_id: int) -> Department:
         obj = await self.session.get(Department, department_id)
@@ -95,7 +100,7 @@ class StaffService:
                 detail=f"Department with name '{name}' already exists.",
             )
 
-    # ── Staff CRUD ────────────────────────────────────────────
+    #Staff CRUD 
 
     async def create_staff(self, payload: StaffCreate) -> Staff:
         await self._assert_unique_field("personal_number", payload.personal_number)
@@ -120,6 +125,13 @@ class StaffService:
         self.session.add(staff)
         await self.session.commit()
         await self.session.refresh(staff)
+
+        try:
+            token = await create_magic_token(self.session, staff.id)
+            await send_magic_link(staff.email, staff.full_name, token)
+        except RuntimeError:
+            pass  # Email failure should not block staff creation
+
         return staff
 
     async def get_staff_by_id(self, staff_id: UUID) -> Staff:
@@ -212,7 +224,7 @@ class StaffService:
             return False
         return datetime.now(timezone.utc) < staff.locked_until
 
-    # ── Directorate CRUD ──────────────────────────────────────
+    #Directorate CRUD
 
     async def create_directorate(self, payload: DirectorateCreate) -> Directorate:
         await self._assert_directorate_name_unique(payload.name)
@@ -251,7 +263,7 @@ class StaffService:
         await self.session.delete(obj)
         await self.session.commit()
 
-    # ── Department CRUD ───────────────────────────────────────
+    #Department CRUD 
 
     async def create_department(self, payload: DepartmentCreate) -> Department:
         await self._get_directorate_or_404(payload.directorate_id)
