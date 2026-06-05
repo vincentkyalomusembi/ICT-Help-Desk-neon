@@ -177,7 +177,7 @@ async def list_directorates(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     session: AsyncSession = Depends(get_db),
-    _: Staff = Depends(get_current_staff),
+
 ):
     return await StaffService(session).list_directorates(skip=skip, limit=limit)
 
@@ -190,7 +190,7 @@ async def list_directorates(
 async def get_directorate(
     directorate_id: int,
     session: AsyncSession = Depends(get_db),
-    _: Staff = Depends(get_current_staff),
+    
 ):
     return await StaffService(session).get_directorate_by_id(directorate_id)
 
@@ -205,7 +205,6 @@ async def list_departments_by_directorate(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     session: AsyncSession = Depends(get_db),
-    _: Staff = Depends(get_current_staff),
 ):
     return await StaffService(session).list_departments(
         skip=skip, limit=limit, directorate_id=directorate_id
@@ -269,7 +268,6 @@ async def list_departments(
     limit: int = Query(50, ge=1, le=200),
     directorate_id: Optional[int] = Query(None, description="Filter by directorate"),
     session: AsyncSession = Depends(get_db),
-    _: Staff = Depends(get_current_staff),
 ):
     return await StaffService(session).list_departments(
         skip=skip, limit=limit, directorate_id=directorate_id
@@ -284,7 +282,6 @@ async def list_departments(
 async def get_department(
     department_id: int,
     session: AsyncSession = Depends(get_db),
-    _: Staff = Depends(get_current_staff),
 ):
     return await StaffService(session).get_department_by_id(department_id)
 
