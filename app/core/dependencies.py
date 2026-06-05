@@ -12,15 +12,14 @@ from app.staff.model import Staff, UserRole
 
 
 def _extract_token(request: Request) -> str:
-    """Extract bearer token from Authorization header."""
-    auth_header: str = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
+    """Extract session token from httpOnly cookie."""
+    token = request.cookies.get("session_id")
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or malformed Authorization header. Expected: Bearer <token>",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Not authenticated. No session cookie found.",
         )
-    return auth_header[len("Bearer "):]
+    return token
 
 
 async def _resolve_session(token: str, db: AsyncSession) -> DBSession:
@@ -34,14 +33,12 @@ async def _resolve_session(token: str, db: AsyncSession) -> DBSession:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid session token.",
-            headers={"WWW-Authenticate": "Bearer"},
         )
 
     if not db_session.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session has been logged out.",
-            headers={"WWW-Authenticate": "Bearer"},
         )
 
     if datetime.now(timezone.utc) >= db_session.expires_at:
@@ -50,7 +47,6 @@ async def _resolve_session(token: str, db: AsyncSession) -> DBSession:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session has expired. Please log in again.",
-            headers={"WWW-Authenticate": "Bearer"},
         )
 
     return db_session
@@ -74,7 +70,7 @@ async def get_current_staff(
         select(Staff).where(Staff.id == db_session.staff_id)
     )
     staff = result.scalar_one_or_none()
-    
+
     if staff is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

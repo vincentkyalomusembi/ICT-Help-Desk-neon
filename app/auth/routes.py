@@ -1,13 +1,14 @@
 from uuid import UUID
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_staff
+from app.core.config import settings
 from app.staff.model import Staff, UserRole
-from app.auth.schemas import LoginRequest, LoginResponse, LogoutRequest, SessionResponse
+from app.auth.schemas import LoginRequest, LoginResponse, SessionResponse
 from app.auth import service
 from app.auth.magic import verify_magic_token, resend_magic_token
 
@@ -29,15 +30,28 @@ def require_admin(current: Staff = Depends(get_current_staff)) -> Staff:
 
 @router.post(
     "/login",
-    response_model=LoginResponse,
-    summary="Login and receive a session token",
+    status_code=status.HTTP_200_OK,
+    summary="Login and receive a session cookie",
 )
 async def login(
     payload: LoginRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
-    return await service.login(db, payload, request)
+    result = await service.login(db, payload, request)
+
+    response.set_cookie(
+        key="session_id",
+        value=result["token"],
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=settings.SESSION_EXPIRE_MINUTES * 60,
+    )
+
+    result.pop("token")
+    return result
 
 
 @router.post(
@@ -46,10 +60,18 @@ async def login(
     summary="Logout current session",
 )
 async def logout(
-    payload: LogoutRequest,
+    request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
-    await service.logout(db, payload.token)
+    token = request.cookies.get("session_id")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active session.",
+        )
+    await service.logout(db, token)
+    response.delete_cookie("session_id")
     return {"message": "Logged out successfully."}
 
 
@@ -59,10 +81,12 @@ async def logout(
     summary="Logout all your active sessions",
 )
 async def logout_all(
+    response: Response,
     current: Staff = Depends(get_current_staff),
     db: AsyncSession = Depends(get_db),
 ):
     count = await service.logout_all(db, current.id)
+    response.delete_cookie("session_id")
     return {"message": f"{count} session(s) terminated."}
 
 
