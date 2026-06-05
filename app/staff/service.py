@@ -19,8 +19,7 @@ class StaffService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    #  Staff helpers
-    
+    # ── Staff helpers ─────────────────────────────────────────
 
     async def _get_or_404(self, staff_id: UUID) -> Staff:
         staff = await self.session.get(Staff, staff_id)
@@ -48,9 +47,7 @@ class StaffService:
                 detail=f"A staff member with {field_name} '{value}' already exists.",
             )
 
-    
-    #  Directorate helpers
-    
+    # ── Directorate helpers ───────────────────────────────────
 
     async def _get_directorate_or_404(self, directorate_id: int) -> Directorate:
         obj = await self.session.get(Directorate, directorate_id)
@@ -73,9 +70,8 @@ class StaffService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Directorate with name '{name}' already exists.",
             )
-        
-    #  Department helpers
-    
+
+    # ── Department helpers ────────────────────────────────────
 
     async def _get_department_or_404(self, department_id: int) -> Department:
         obj = await self.session.get(Department, department_id)
@@ -99,8 +95,7 @@ class StaffService:
                 detail=f"Department with name '{name}' already exists.",
             )
 
-    #  Staff CRUD
-    
+    # ── Staff CRUD ────────────────────────────────────────────
 
     async def create_staff(self, payload: StaffCreate) -> Staff:
         await self._assert_unique_field("personal_number", payload.personal_number)
@@ -116,6 +111,7 @@ class StaffService:
             department_id=payload.department_id,
             job_title=payload.job_title,
             office_location=payload.office_location,
+            office_number=payload.office_number,
             role=payload.role,
             password_hash=hash_password(payload.password),
             password_changed_at=now,
@@ -216,7 +212,7 @@ class StaffService:
             return False
         return datetime.now(timezone.utc) < staff.locked_until
 
-    #  Directorate CRUD
+    # ── Directorate CRUD ──────────────────────────────────────
 
     async def create_directorate(self, payload: DirectorateCreate) -> Directorate:
         await self._assert_directorate_name_unique(payload.name)
@@ -255,8 +251,7 @@ class StaffService:
         await self.session.delete(obj)
         await self.session.commit()
 
-    #  Department CRUD
-    
+    # ── Department CRUD ───────────────────────────────────────
 
     async def create_department(self, payload: DepartmentCreate) -> Department:
         await self._get_directorate_or_404(payload.directorate_id)
