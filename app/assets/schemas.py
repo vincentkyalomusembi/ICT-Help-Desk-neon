@@ -45,6 +45,7 @@ class AssetResponse(BaseModel):
 class AssetAllocationCreate(BaseModel):
     asset_id: int
     staff_id: UUID
+    allocated_by_id: int
     allocation_date: date
     notes: Optional[str] = None
 
