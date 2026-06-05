@@ -6,97 +6,203 @@ from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.auth.model import Session as AuthSession
-from app.core.config import settings
+from app.auth.model import Session as DBSession
+from app.auth.schemas import LoginRequest
 from app.staff.model import Staff
+from app.core.config import settings
+from app.core.security import verify_password, generate_session_token
+from app.audit.service import audit_service
+from app.audit.schemas import AuditLogCreate
+from app.audit.model import AuditAction
 
-pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
+
+# Helpers
+
+def _get_client_ip(request: Request) -> Optional[str]:
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.client.host if request.client else None
 
 
-class AuthService:
-    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
-        return pwd_context.verify(plain_password, hashed_password)
+# Login
 
-    def create_access_token(self, data: dict, expires_delta: timedelta) -> str:
-        to_encode = data.copy()
-        expire = datetime.utcnow() + expires_delta
-        to_encode.update({'exp': expire})
-        return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> dict:
+    result = await db.execute(select(Staff).where(Staff.email == payload.email))
+    staff = result.scalar_one_or_none()
 
-    async def get_staff_by_email(self, session: AsyncSession, email: str) -> Optional[Staff]:
-        stmt = select(Staff).where(Staff.email == email)
-        result = await session.execute(stmt)
-        return result.scalars().first()
-
-    async def login(self, session: AsyncSession, email: str, password: str, ip_address: Optional[str] = None) -> dict:
-        staff = await self.get_staff_by_email(session, email)
-        if staff is None:
-            raise ValueError('Invalid email or password')
-
-        now = datetime.utcnow()
-        if staff.locked_until and staff.locked_until > now:
-            raise ValueError('Account is locked. Please try again later.')
-
-        if not self.verify_password(password, staff.password_hash):
-            staff.failed_attempts = (staff.failed_attempts or 0) + 1
-            await session.commit()
-            raise ValueError('Invalid email or password')
-
-        if staff.failed_attempts:
-            staff.failed_attempts = 0
-            await session.commit()
-
-        expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = self.create_access_token(
-            {
-                'sub': str(staff.id),
-                'role': str(staff.role),
-            },
-            expires_delta,
+    if not staff:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password.",
         )
 
-        expires_at = now + expires_delta
-        auth_session = AuthSession(
+    if staff.locked_until and staff.locked_until > datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Account is locked until {staff.locked_until.isoformat()}. Please contact an administrator.",
+        )
+
+    if not verify_password(payload.password, staff.password_hash):
+        staff.failed_attempts += 1
+        if staff.failed_attempts >= 5:
+            staff.locked_until = datetime.now(timezone.utc) + timedelta(minutes=settings.LOCKOUT_DURATION_MINUTES)
+        await db.commit()
+        remaining = max(0, 5 - staff.failed_attempts)
+        detail = (
+            f"Invalid email or password. {remaining} attempt(s) remaining before lockout."
+            if remaining > 0
+            else "Account has been locked due to too many failed attempts."
+        )
+
+        # Log failed login — no session exists yet, so we log with ip only
+        await audit_service.create_system(
+            session=db,
+            log_in=AuditLogCreate(
+                staff_id=staff.id,
+                action=AuditAction.LOGIN_FAILED,
+                table_name="sessions",
+                record_id=None,
+                mac_address=None,
+            ),
+            ip_address=_get_client_ip(request),
+        )
+
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=detail,
+        )
+
+    staff.failed_attempts = 0
+    staff.locked_until = None
+    await db.commit()
+
+    now = datetime.now(timezone.utc)
+    session = DBSession(
+        staff_id=staff.id,
+        token=generate_session_token(),
+        ip_address=_get_client_ip(request),
+        login_at=now,
+        expires_at=now + timedelta(minutes=settings.SESSION_EXPIRE_MINUTES),
+        is_active=True,
+    )
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+
+    #Log successful login — session exists so we pass it in
+    await audit_service.create(
+        session=db,
+        log_in=AuditLogCreate(
             staff_id=staff.id,
-            token=access_token,
-            ip_address=ip_address,
-            login_at=now,
-            expires_at=expires_at,
-            is_active=True,
+            action=AuditAction.LOGIN_SUCCESS,
+            table_name="sessions",
+            record_id=session.id,
+            mac_address=None,
+        ),
+        user_session=session,
+    )
+
+    return {
+        "message": "Login successful.",
+        "staff_id": staff.id,
+        "role": staff.role.value,
+        "token": session.token,
+        "expires_at": session.expires_at,
+    }
+
+
+# Logout
+
+async def logout(db: AsyncSession, token: str) -> None:
+    result = await db.execute(select(DBSession).where(DBSession.token == token))
+    session = result.scalar_one_or_none()
+
+    if not session or not session.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session not found or already logged out.",
         )
-        session.add(auth_session)
-        await session.commit()
-        await session.refresh(auth_session)
 
-        return {
-            'message': 'Login successful',
-            'staff_id': staff.id,
-            'role': str(staff.role),
-            'token': access_token,
-            'expires_at': expires_at,
-            'session': auth_session,
-        }
+    session.is_active = False
+    db.add(session)
+    await db.commit()
 
-    async def logout(self, session: AsyncSession, token: str) -> bool:
-        stmt = select(AuthSession).where(AuthSession.token == token, AuthSession.is_active == True)
-        result = await session.execute(stmt)
-        auth_session = result.scalars().first()
-        if auth_session is None:
-            return False
-
-        auth_session.is_active = False
-        await session.commit()
-        return True
-
-    async def list_sessions(self, session: AsyncSession) -> List[AuthSession]:
-        stmt = select(AuthSession).order_by(AuthSession.id.desc())
-        result = await session.execute(stmt)
-        return result.scalars().all()
-
-    async def get_session(self, session: AsyncSession, session_id: int) -> Optional[AuthSession]:
-        stmt = select(AuthSession).where(AuthSession.id == session_id)
-        result = await session.execute(stmt)
-        return result.scalars().first()
+    #Log logout
+    await audit_service.create(
+        session=db,
+        log_in=AuditLogCreate(
+            staff_id=session.staff_id,
+            action=AuditAction.LOGOUT,
+            table_name="sessions",
+            record_id=session.id,
+            mac_address=None,
+        ),
+        user_session=session,
+    )
 
 
-auth_service = AuthService()
+async def logout_all(db: AsyncSession, staff_id: UUID) -> int:
+    result = await db.execute(
+        select(DBSession).where(
+            DBSession.staff_id == staff_id,
+            DBSession.is_active == True,
+        )
+    )
+    sessions = result.scalars().all()
+
+    for s in sessions:
+        s.is_active = False
+        db.add(s)
+
+    await db.commit()
+
+    #Log one entry per session terminated
+    for s in sessions:
+        await audit_service.create(
+            session=db,
+            log_in=AuditLogCreate(
+                staff_id=staff_id,
+                action=AuditAction.LOGOUT,
+                table_name="sessions",
+                record_id=s.id,
+                mac_address=None,
+            ),
+            user_session=s,
+        )
+
+    return len(sessions)
+
+
+# Queries
+
+async def list_active_sessions(db: AsyncSession, staff_id: UUID) -> list[DBSession]:
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(DBSession).where(
+            DBSession.staff_id == staff_id,
+            DBSession.is_active == True,
+            DBSession.expires_at > now,
+        )
+    )
+    return result.scalars().all()
+
+
+async def list_all_sessions(
+    db: AsyncSession,
+    skip: int = 0,
+    limit: int = 50,
+    staff_id: Optional[UUID] = None,
+    active_only: bool = False,
+) -> list[DBSession]:
+    stmt = select(DBSession)
+    if staff_id:
+        stmt = stmt.where(DBSession.staff_id == staff_id)
+    if active_only:
+        stmt = stmt.where(
+            DBSession.is_active == True,
+            DBSession.expires_at > datetime.now(timezone.utc),
+        )
+    stmt = stmt.order_by(DBSession.login_at.desc()).offset(skip).limit(limit)
+    result = await db.execute(stmt)
+    return result.scalars().all()
