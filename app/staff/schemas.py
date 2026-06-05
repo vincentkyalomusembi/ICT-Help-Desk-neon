@@ -38,7 +38,16 @@ class DepartmentResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class DirectorateUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
 
+
+class DepartmentUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    directorate_id: Optional[int] = None
+    
 #Staff 
 
 class StaffCreate(BaseModel):
