@@ -45,6 +45,10 @@ class AssetResponse(BaseModel):
 class AssetAllocationCreate(BaseModel):
     asset_id: int
     staff_id: UUID
+<<<<<<< HEAD
+=======
+    allocated_by_id: int
+>>>>>>> 9eff8ba (fixed assets/schema.py)
     allocation_date: date
     notes: Optional[str] = None
 
