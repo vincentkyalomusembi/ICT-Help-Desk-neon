@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     SECRET_KEY: str
     SESSION_EXPIRE_MINUTES: int
+    LOCKOUT_DURATION_MINUTES: int
 
     model_config = SettingsConfigDict(
         env_file=str(BASE_DIR / ".env"),
