@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     SESSION_EXPIRE_MINUTES: int
     LOCKOUT_DURATION_MINUTES: int
+    MAGIC_LINK_EXPIRE_MINUTES: int
 
     model_config = SettingsConfigDict(
         env_file=str(BASE_DIR / ".env"),
