@@ -50,7 +50,7 @@ class StaffCreate(BaseModel):
     department_id: int
     job_title: str
     office_location: Optional[str] = None
-    office_number: Optional[str] = None
+    office_number: str
     role: UserRole = UserRole.staff
     password: str
     confirm_password: str
@@ -83,7 +83,7 @@ class StaffResponse(BaseModel):
     department_id: int
     job_title: str
     office_location: Optional[str]
-    office_number: Optional[str]
+    office_number: str
     role: UserRole
     created_at: datetime
 
