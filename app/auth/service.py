@@ -46,7 +46,7 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
     if not verify_password(payload.password, staff.password_hash):
         staff.failed_attempts += 1
         if staff.failed_attempts >= 5:
-            staff.locked_until = datetime.now(timezone.utc) + timedelta(minutes=30)
+            staff.locked_until = datetime.now(timezone.utc) + timedelta(minutes=settings.LOCKOUT_DURATION_MINUTES)
         await db.commit()
         remaining = max(0, 5 - staff.failed_attempts)
         detail = (
