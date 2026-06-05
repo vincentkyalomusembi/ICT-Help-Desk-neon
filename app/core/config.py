@@ -1,7 +1,11 @@
+import os
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+load_dotenv(BASE_DIR / ".env", override=True)
 
 
 class Settings(BaseSettings):
@@ -17,8 +21,14 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_file=str(BASE_DIR / ".env"),
+        env_file_encoding="utf-8",
         case_sensitive=True,
     )
 
 
 settings = Settings()
+
+if not settings.BREVO_API_KEY.startswith("xkeysib-"):
+    raise RuntimeError(
+        f"Invalid BREVO_API_KEY — expected xkeysib- prefix, got: {settings.BREVO_API_KEY[:12]}..."
+    )
