@@ -6,15 +6,14 @@ from app.audit.model import AuditAction
 
 
 class AuditLogCreate(BaseModel):
-    staff_id: Optional[int] = None
+    staff_id: Optional[UUID] = None      
     action: AuditAction
     table_name: str
     record_id: Optional[int] = None
-    ip_address: Optional[str] = None
     mac_address: Optional[str] = None
 
+
 class AuditLogUpdate(BaseModel):
-    # All fields optional for PATCH updates
     staff_id: Optional[UUID] = None
     action: Optional[AuditAction] = None
     table_name: Optional[str] = None
@@ -22,9 +21,11 @@ class AuditLogUpdate(BaseModel):
     ip_address: Optional[str] = None
     mac_address: Optional[str] = None
 
+
 class AuditLogResponse(BaseModel):
     id: int
-    staff_id: Optional[int]
+    staff_id: Optional[UUID]             
+    session_id: Optional[int]            
     action: AuditAction
     table_name: str
     record_id: Optional[int]

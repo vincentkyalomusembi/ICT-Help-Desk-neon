@@ -1,18 +1,19 @@
 from typing import List, Optional
-
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-
-from app.ict_personnel.model import IctPersonnel
+from sqlalchemy import func
+from app.ict_personnel.model import IctPersonnel, Availability
 from app.ict_personnel.schemas import IctPersonnelCreate, IctPersonnelUpdate
+from app.tickets.model import Ticket, TicketStatus
 
 
 class IctPersonnelService:
+
     async def create(self, session: AsyncSession, payload: IctPersonnelCreate) -> IctPersonnel:
         personnel = IctPersonnel(
             staff_id=payload.staff_id,
             specialization=payload.specialization,
-            availability=payload.availability,
+            availability=Availability.available,
             phone_extension=payload.phone_extension,
             is_active=True,
         )
@@ -54,10 +55,30 @@ class IctPersonnelService:
         personnel = await self.get(session, personnel_id)
         if personnel is None:
             return False
-
         await session.delete(personnel)
         await session.commit()
         return True
+
+    async def get_open_ticket_count(self, session: AsyncSession, personnel_id: int) -> int:
+        result = await session.execute(
+            select(func.count(Ticket.id)).where(
+                Ticket.assigned_to_id == personnel_id,
+                Ticket.status.in_([TicketStatus.open, TicketStatus.in_progress])
+            )
+        )
+        return result.scalar()
+
+    async def sync_availability(self, session: AsyncSession, personnel_id: int) -> IctPersonnel:
+        personnel = await self.get(session, personnel_id)
+        if not personnel:
+            return None
+        count = await self.get_open_ticket_count(session, personnel_id)
+        if count == 0 and personnel.availability == Availability.busy:
+            personnel.availability = Availability.available
+            session.add(personnel)
+            await session.commit()
+            await session.refresh(personnel)
+        return personnel
 
 
 ict_personnel_service = IctPersonnelService()

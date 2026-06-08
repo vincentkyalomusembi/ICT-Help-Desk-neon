@@ -58,6 +58,7 @@ class Staff(SQLModel, table=True):
     department_id: int = Field(foreign_key="departments.id")
     job_title: str = Field(max_length=100)
     office_location: Optional[str] = Field(default=None, max_length=100)
+    office_number: str = Field(max_length=20)
     role: UserRole = Field(default=UserRole.staff)
     password_hash: str
     failed_attempts: int = Field(default=0)
@@ -67,6 +68,7 @@ class Staff(SQLModel, table=True):
     password_changed_at: datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
     )
+    is_activated: bool = Field(default=False)
     created_at: datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
     )

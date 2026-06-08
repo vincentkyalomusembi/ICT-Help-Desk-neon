@@ -1,20 +1,17 @@
 from pydantic import BaseModel
 from typing import Optional
 from uuid import UUID
-
 from app.ict_personnel.model import Specialization, Availability
 
 
 class IctPersonnelCreate(BaseModel):
     staff_id: UUID
     specialization: Specialization
-    availability: Availability = Availability.available
     phone_extension: Optional[str] = None
 
 
 class IctPersonnelUpdate(BaseModel):
     specialization: Optional[Specialization] = None
-    availability: Optional[Availability] = None
     phone_extension: Optional[str] = None
     is_active: Optional[bool] = None
 

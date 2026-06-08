@@ -38,7 +38,16 @@ class DepartmentResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class DirectorateUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
 
+
+class DepartmentUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    directorate_id: Optional[int] = None
+    
 #Staff 
 
 class StaffCreate(BaseModel):
@@ -50,6 +59,7 @@ class StaffCreate(BaseModel):
     department_id: int
     job_title: str
     office_location: Optional[str] = None
+    office_number: str
     role: UserRole = UserRole.staff
     password: str
     confirm_password: str
@@ -66,6 +76,7 @@ class StaffUpdate(BaseModel):
     phone_number: Optional[str] = None
     job_title: Optional[str] = None
     office_location: Optional[str] = None
+    office_number: Optional[str] = None
     directorate_id: Optional[int] = None
     department_id: Optional[int] = None
     role: Optional[UserRole] = None
@@ -81,6 +92,7 @@ class StaffResponse(BaseModel):
     department_id: int
     job_title: str
     office_location: Optional[str]
+    office_number: str
     role: UserRole
     created_at: datetime
 

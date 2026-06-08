@@ -1,18 +1,18 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import update
+from fastapi import HTTPException
 from app.assets.model import Asset, AssetAllocation
 from app.assets.schemas import (
     AssetCreate, AssetUpdate,
     AssetAllocationCreate, AssetAllocationUpdate
 )
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 # ── Asset Services ────────────────────────────────────────────
 
 async def create_asset(db: AsyncSession, data: AssetCreate) -> Asset:
-    asset = Asset(**data.model_dump(), created_at=datetime.utcnow())
+    asset = Asset(**data.model_dump(), created_at=datetime.now(timezone.utc))
     db.add(asset)
     await db.commit()
     await db.refresh(asset)
@@ -52,6 +52,20 @@ async def delete_asset(db: AsyncSession, asset_id: int) -> bool:
 # ── Asset Allocation Services ─────────────────────────────────
 
 async def allocate_asset(db: AsyncSession, data: AssetAllocationCreate) -> AssetAllocation:
+    # Check if asset is already allocated
+    result = await db.execute(
+        select(AssetAllocation).where(
+            AssetAllocation.asset_id == data.asset_id,
+            AssetAllocation.return_date == None
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="Asset is already allocated. Return it first before reallocating."
+        )
+
     allocation = AssetAllocation(**data.model_dump())
     db.add(allocation)
     await db.commit()
