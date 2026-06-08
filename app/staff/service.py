@@ -114,7 +114,6 @@ class StaffService:
             phone_number=payload.phone_number,
             directorate_id=payload.directorate_id,
             department_id=payload.department_id,
-            job_title=payload.job_title,
             office_location=payload.office_location,
             office_number=payload.office_number,
             role=payload.role,
