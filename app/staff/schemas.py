@@ -57,7 +57,6 @@ class StaffCreate(BaseModel):
     phone_number: Optional[str] = None
     directorate_id: int
     department_id: int
-    job_title: str
     office_location: Optional[str] = None
     office_number: str
     role: UserRole = UserRole.staff
