@@ -34,6 +34,14 @@ class DepartmentCreate(BaseModel):
     description: Optional[str] = None
 
 
+class DepartmentBasic(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
 class DepartmentResponse(BaseModel):
     id: int
     directorate_id: int
@@ -96,6 +104,7 @@ class StaffResponse(BaseModel):
     phone_number: Optional[str]
     directorate_id: int
     department_id: int
+    department: Optional[DepartmentBasic]
     office_location: Optional[str]
     office_number: str
     role: UserRole
