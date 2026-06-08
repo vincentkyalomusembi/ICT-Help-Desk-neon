@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.auth.model import Session as DBSession
@@ -67,7 +68,9 @@ async def get_current_staff(
 ) -> Staff:
     """Dependency that returns the current authenticated staff member."""
     result = await db.execute(
-        select(Staff).where(Staff.id == db_session.staff_id)
+        select(Staff)
+        .where(Staff.id == db_session.staff_id)
+        .options(selectinload(Staff.department))
     )
     staff = result.scalar_one_or_none()
 
