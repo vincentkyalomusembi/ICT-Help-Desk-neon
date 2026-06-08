@@ -56,7 +56,6 @@ class Staff(SQLModel, table=True):
     phone_number: Optional[str] = Field(default=None, max_length=15)
     directorate_id: int = Field(foreign_key="directorates.id")
     department_id: int = Field(foreign_key="departments.id")
-    job_title: str = Field(max_length=100)
     office_location: Optional[str] = Field(default=None, max_length=100)
     office_number: str = Field(max_length=20)
     role: UserRole = Field(default=UserRole.staff)
