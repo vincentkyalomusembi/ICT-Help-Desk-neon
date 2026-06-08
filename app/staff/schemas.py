@@ -5,7 +5,7 @@ from uuid import UUID
 from app.staff.model import UserRole
 
 
-#Directorate 
+# Directorate
 
 class DirectorateCreate(BaseModel):
     name: str
@@ -21,7 +21,12 @@ class DirectorateResponse(BaseModel):
         from_attributes = True
 
 
-#Department 
+class DirectorateUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+# Department
 
 class DepartmentCreate(BaseModel):
     directorate_id: int
@@ -38,17 +43,14 @@ class DepartmentResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class DirectorateUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-
 
 class DepartmentUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     directorate_id: Optional[int] = None
-    
-#Staff 
+
+
+# Staff
 
 class StaffCreate(BaseModel):
     personal_number: str
@@ -70,10 +72,15 @@ class StaffCreate(BaseModel):
         return self
 
 
+class StaffCreateResponse(BaseModel):
+    message: str
+    staff_id: UUID
+    email: str
+
+
 class StaffUpdate(BaseModel):
     full_name: Optional[str] = None
     phone_number: Optional[str] = None
-    job_title: Optional[str] = None
     office_location: Optional[str] = None
     office_number: Optional[str] = None
     directorate_id: Optional[int] = None
@@ -89,7 +96,6 @@ class StaffResponse(BaseModel):
     phone_number: Optional[str]
     directorate_id: int
     department_id: int
-    job_title: str
     office_location: Optional[str]
     office_number: str
     role: UserRole
@@ -99,10 +105,10 @@ class StaffResponse(BaseModel):
         from_attributes = True
 
 
-#Password 
+# Password
 
 class PasswordChangeRequest(BaseModel):
-    current_password: str          # must supply old password to change it
+    current_password: str
     new_password: str
     confirm_new_password: str
 
