@@ -90,14 +90,14 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
     await db.commit()
     await db.refresh(session)
 
-    #Log successful login — session exists so we pass it in
+    # Log successful login — session exists so we pass it in
     await audit_service.create(
         session=db,
         log_in=AuditLogCreate(
             staff_id=staff.id,
             action=AuditAction.LOGIN_SUCCESS,
             table_name="sessions",
-            record_id=session.id,
+            record_id=str(session.id),
             mac_address=None,
         ),
         user_session=session,
@@ -128,14 +128,14 @@ async def logout(db: AsyncSession, token: str) -> None:
     db.add(session)
     await db.commit()
 
-    #Log logout
+    # Log logout
     await audit_service.create(
         session=db,
         log_in=AuditLogCreate(
             staff_id=session.staff_id,
             action=AuditAction.LOGOUT,
             table_name="sessions",
-            record_id=session.id,
+            record_id=str(session.id),
             mac_address=None,
         ),
         user_session=session,
@@ -157,7 +157,7 @@ async def logout_all(db: AsyncSession, staff_id: UUID) -> int:
 
     await db.commit()
 
-    #Log one entry per session terminated
+    # Log one entry per session terminated
     for s in sessions:
         await audit_service.create(
             session=db,
@@ -165,7 +165,7 @@ async def logout_all(db: AsyncSession, staff_id: UUID) -> int:
                 staff_id=staff_id,
                 action=AuditAction.LOGOUT,
                 table_name="sessions",
-                record_id=s.id,
+                record_id=str(s.id),
                 mac_address=None,
             ),
             user_session=s,
