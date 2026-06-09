@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
 from typing import Annotated
-from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +12,6 @@ from app.staff.model import Staff, UserRole
 
 
 def _extract_token(request: Request) -> str:
-    """Extract session token from httpOnly cookie."""
     token = request.cookies.get("session_id")
     if not token:
         raise HTTPException(
@@ -24,7 +22,6 @@ def _extract_token(request: Request) -> str:
 
 
 async def _resolve_session(token: str, db: AsyncSession) -> DBSession:
-    """Look up and validate the session."""
     result = await db.execute(
         select(DBSession).where(DBSession.token == token)
     )
@@ -35,13 +32,11 @@ async def _resolve_session(token: str, db: AsyncSession) -> DBSession:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid session token.",
         )
-
     if not db_session.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session has been logged out.",
         )
-
     if datetime.now(timezone.utc) >= db_session.expires_at:
         db_session.is_active = False
         await db.commit()
@@ -49,7 +44,6 @@ async def _resolve_session(token: str, db: AsyncSession) -> DBSession:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session has expired. Please log in again.",
         )
-
     return db_session
 
 
@@ -57,7 +51,6 @@ async def get_current_session(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> DBSession:
-    """Dependency that returns validated session."""
     token = _extract_token(request)
     return await _resolve_session(token, db)
 
@@ -66,11 +59,13 @@ async def get_current_staff(
     db_session: DBSession = Depends(get_current_session),
     db: AsyncSession = Depends(get_db),
 ) -> Staff:
-    """Dependency that returns the current authenticated staff member."""
     result = await db.execute(
         select(Staff)
         .where(Staff.id == db_session.staff_id)
-        .options(selectinload(Staff.department))
+        .options(
+            selectinload(Staff.department),
+            selectinload(Staff.ict_profile),  # needed for ICT role checks
+        )
     )
     staff = result.scalar_one_or_none()
 
@@ -79,13 +74,16 @@ async def get_current_staff(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Staff account no longer exists.",
         )
+
+    # Attach the current session onto the staff object so
+    # downstream services (tickets, audit) can access it directly
+    staff._session = db_session
     return staff
 
 
 async def get_current_active_staff(
     current: Staff = Depends(get_current_staff),
 ) -> Staff:
-    """Dependency that ensures the staff account is not locked."""
     if current.locked_until and datetime.now(timezone.utc) < current.locked_until:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -97,7 +95,6 @@ async def get_current_active_staff(
 async def require_admin(
     current: Staff = Depends(get_current_active_staff),
 ) -> Staff:
-    """Dependency that requires admin role."""
     if current.role != UserRole.admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -109,7 +106,6 @@ async def require_admin(
 async def require_ict(
     current: Staff = Depends(get_current_active_staff),
 ) -> Staff:
-    """Dependency that requires ICT personnel or admin role."""
     if current.role not in {UserRole.ict_personnel, UserRole.admin}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -118,7 +114,6 @@ async def require_ict(
     return current
 
 
-# Type aliases for easier use in route parameters
 CurrentStaff = Annotated[Staff, Depends(get_current_active_staff)]
 AdminStaff = Annotated[Staff, Depends(require_admin)]
 IctStaff = Annotated[Staff, Depends(require_ict)]
