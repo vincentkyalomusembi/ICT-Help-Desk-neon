@@ -1,19 +1,22 @@
 from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.database import get_db
 from app.core.dependencies import CurrentStaff, IctStaff, AdminStaff
 from app.ict_personnel.schemas import (
     IctPersonnelCreate,
     IctPersonnelResponse,
     IctPersonnelUpdate,
+    IctPersonnelDutyUpdate,
 )
 from app.ict_personnel.service import ict_personnel_service
 
-router = APIRouter(prefix='/ict-personnel', tags=['ict_personnel'])
+router = APIRouter(prefix="/ict-personnel", tags=["ICT Personnel"])
 
 
-@router.post('/', response_model=IctPersonnelResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=IctPersonnelResponse, status_code=status.HTTP_201_CREATED)
 async def create_ict_personnel(
     payload: IctPersonnelCreate,
     _: AdminStaff,
@@ -22,12 +25,17 @@ async def create_ict_personnel(
     return await ict_personnel_service.create(session, payload)
 
 
-@router.get('/', response_model=List[IctPersonnelResponse])
-async def list_ict_personnel(_: CurrentStaff, session: AsyncSession = Depends(get_db)):
-    return await ict_personnel_service.list(session)
+@router.get("/", response_model=List[IctPersonnelResponse])
+async def list_ict_personnel(
+    _: CurrentStaff,
+    skip: int = 0,
+    limit: int = 50,
+    session: AsyncSession = Depends(get_db),
+):
+    return await ict_personnel_service.list(session, skip, limit)
 
 
-@router.get('/{personnel_id}', response_model=IctPersonnelResponse)
+@router.get("/{personnel_id}", response_model=IctPersonnelResponse)
 async def get_ict_personnel(
     personnel_id: int,
     _: CurrentStaff,
@@ -35,11 +43,14 @@ async def get_ict_personnel(
 ):
     personnel = await ict_personnel_service.get(session, personnel_id)
     if personnel is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='ICT personnel profile not found')
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="ICT personnel profile not found."
+        )
     return personnel
 
 
-@router.patch('/{personnel_id}', response_model=IctPersonnelResponse)
+@router.patch("/{personnel_id}", response_model=IctPersonnelResponse)
 async def update_ict_personnel(
     personnel_id: int,
     payload: IctPersonnelUpdate,
@@ -48,11 +59,41 @@ async def update_ict_personnel(
 ):
     personnel = await ict_personnel_service.update(session, personnel_id, payload)
     if personnel is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='ICT personnel profile not found')
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="ICT personnel profile not found."
+        )
     return personnel
 
 
-@router.delete('/{personnel_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.patch("/{personnel_id}/duty-status", response_model=IctPersonnelResponse)
+async def set_duty_status(
+    personnel_id: int,
+    payload: IctPersonnelDutyUpdate,
+    _: AdminStaff,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Admin sets a technician off duty, on leave, or returns them to available.
+    Cannot override busy — ticket lifecycle controls that.
+    """
+    try:
+        payload.validate_duty_status()
+        personnel = await ict_personnel_service.set_duty_status(
+            session, personnel_id, payload.availability
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+    if personnel is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="ICT personnel profile not found."
+        )
+    return personnel
+
+
+@router.delete("/{personnel_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_ict_personnel(
     personnel_id: int,
     _: AdminStaff,
@@ -60,16 +101,7 @@ async def delete_ict_personnel(
 ):
     deleted = await ict_personnel_service.delete(session, personnel_id)
     if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='ICT personnel profile not found')
-
-
-@router.post('/{personnel_id}/sync-availability', response_model=IctPersonnelResponse)
-async def sync_availability(
-    personnel_id: int,
-    _: IctStaff,
-    session: AsyncSession = Depends(get_db),
-):
-    personnel = await ict_personnel_service.sync_availability(session, personnel_id)
-    if personnel is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='ICT personnel profile not found')
-    return personnel
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="ICT personnel profile not found."
+        )

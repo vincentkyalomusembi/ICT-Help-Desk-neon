@@ -1,1 +1,1 @@
-from .model import TicketCategory, TicketStatus, TicketStatus
+from .model import TicketCategory, TicketStatus
