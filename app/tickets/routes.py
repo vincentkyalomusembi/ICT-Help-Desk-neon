@@ -5,7 +5,7 @@ from typing import List
 from app.core.database import get_db
 from app.core.dependencies import CurrentStaff, IctStaff, AdminStaff
 from app.tickets.service import (
-    create_ticket, get_ticket, list_tickets,
+    create_ticket, get_ticket, list_tickets, list_queued_tickets,
     update_ticket, delete_ticket, get_stuck_tickets, reassign_ticket
 )
 from app.tickets.schemas import TicketCreate, TicketUpdate, TicketResponse, TicketAdminResponse
@@ -19,10 +19,9 @@ async def create(
     current_staff: CurrentStaff,
     session: AsyncSession = Depends(get_db),
 ):
-    try:
-        return await create_ticket(session, ticket, current_staff.id, current_staff._session)
-    except RuntimeError as e:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
+    # _auto_assign now returns None instead of raising — no try/except needed.
+    # Ticket is queued unassigned (assigned_to_id=None, status=open) and 201 is returned.
+    return await create_ticket(session, ticket, current_staff.id, current_staff._session)
 
 
 # NOTE: static routes must come before /{ticket_id}
@@ -35,6 +34,16 @@ async def stuck_tickets(
     return await get_stuck_tickets(session, threshold_hours)
 
 
+# CHANGE 5: Admin endpoint to view queued (unassigned) tickets
+@router.get("/admin/queued", response_model=List[TicketAdminResponse])
+async def queued_tickets(
+    _: AdminStaff,
+    session: AsyncSession = Depends(get_db),
+):
+    """List tickets awaiting assignment (no tech was available at creation time)."""
+    return await list_queued_tickets(session)
+
+
 @router.get("/", response_model=List[TicketResponse])
 async def read_all(
     current_staff: CurrentStaff,
@@ -42,7 +51,6 @@ async def read_all(
     limit: int = 50,
     session: AsyncSession = Depends(get_db),
 ):
-    # Admin sees all, ICT sees assigned, staff sees own
     if current_staff.role == "ADMIN":
         return await list_tickets(session, skip, limit)
     elif current_staff.role == "ICT_PERSONNEL":
@@ -57,7 +65,6 @@ async def read(
     current_staff: CurrentStaff,
     session: AsyncSession = Depends(get_db),
 ):
-    # Pass personnel id so system auto-flips to in_progress when ICT views their ticket
     personnel_id = (
         current_staff.ict_profile.id
         if current_staff.role == "ICT_PERSONNEL" and current_staff.ict_profile
@@ -101,9 +108,11 @@ async def reassign(
 ):
     try:
         return await reassign_ticket(session, ticket_id, current_staff._session)
-    except ValueError as e:
+    except LookupError as e:
+        # Ticket not found
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except RuntimeError as e:
+    except ValueError as e:
+        # No technician available — ticket stays queued
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
 
 
@@ -116,4 +125,3 @@ async def delete(
     success = await delete_ticket(session, ticket_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
-
