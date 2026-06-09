@@ -28,12 +28,14 @@ CATEGORY_TO_SPECIALIZATION = {
 
 # ── Auto Assignment ────────────────────────────────────────────
 
-async def _auto_assign(db: AsyncSession, category: TicketCategory) -> IctPersonnel:
+# CHANGE 2: Returns Optional[IctPersonnel] — None instead of raising when nobody available.
+# Also falls back to any available tech if no specialist found.
+async def _auto_assign(db: AsyncSession, category: TicketCategory) -> Optional[IctPersonnel]:
     specialization = CATEGORY_TO_SPECIALIZATION.get(category)
 
     stmt = select(IctPersonnel).where(
         IctPersonnel.is_active == True,
-        IctPersonnel.availability == Availability.available,  # AVAILABLE only
+        IctPersonnel.availability == Availability.available,
     )
     if specialization:
         stmt = stmt.where(IctPersonnel.specialization == specialization)
@@ -41,14 +43,20 @@ async def _auto_assign(db: AsyncSession, category: TicketCategory) -> IctPersonn
     result = await db.execute(stmt)
     candidates = result.scalars().all()
 
-    if not candidates:
-        raise RuntimeError(
-            f"No available ICT personnel for category '{category}'. "
-            "Ticket creation blocked until a technician becomes available."
+    # Fallback: if no specialist found, try any available tech
+    if not candidates and specialization:
+        fallback_stmt = select(IctPersonnel).where(
+            IctPersonnel.is_active == True,
+            IctPersonnel.availability == Availability.available,
         )
+        fallback_result = await db.execute(fallback_stmt)
+        candidates = fallback_result.scalars().all()
 
-    # Among available, pick the one who has been idle longest (fairness)
-    # i.e. whose last closed_at is oldest, or has never had a ticket
+    # No one available at all — return None instead of raising
+    if not candidates:
+        return None
+
+    # Among available, pick the one idle longest (fairness)
     best = None
     oldest_closed = None
 
@@ -68,14 +76,12 @@ async def _auto_assign(db: AsyncSession, category: TicketCategory) -> IctPersonn
             oldest_closed = last_closed
             best = candidate
 
-    if not best:
-        raise RuntimeError("Could not determine assignment target.")
-
-    return best
+    return best  # May be None if loop somehow yields nothing
 
 
 # ── Ticket Services ────────────────────────────────────────────
 
+# CHANGE 3: Handles None from _auto_assign — queues ticket unassigned.
 async def create_ticket(
     db: AsyncSession,
     data: TicketCreate,
@@ -86,7 +92,8 @@ async def create_ticket(
 
     ticket = Ticket(
         staff_id=staff_id,
-        assigned_to_id=personnel.id,
+        # CHANGE 1: assigned_to_id is Optional[int]; None when no tech available
+        assigned_to_id=personnel.id if personnel else None,
         title=data.title,
         description=data.description,
         category=data.category,
@@ -94,13 +101,14 @@ async def create_ticket(
     )
     db.add(ticket)
 
-    # Mark technician busy
-    personnel.availability = Availability.busy
+    if personnel:
+        # Only mark busy when actually assigned
+        personnel.availability = Availability.busy
 
     await db.commit()
     await db.refresh(ticket)
 
-    # Audit: created + assigned
+    # Audit: ticket created (always)
     await audit_service.create(db, AuditLogCreate(
         staff_id=staff_id,
         action=AuditAction.TICKET_CREATED,
@@ -108,12 +116,14 @@ async def create_ticket(
         record_id=str(ticket.id),
     ), user_session)
 
-    await audit_service.create(db, AuditLogCreate(
-        staff_id=staff_id,
-        action=AuditAction.TICKET_ASSIGNED,
-        table_name="tickets",
-        record_id=str(ticket.id),
-    ), user_session)
+    # Audit: assigned only when a tech was found
+    if personnel:
+        await audit_service.create(db, AuditLogCreate(
+            staff_id=staff_id,
+            action=AuditAction.TICKET_ASSIGNED,
+            table_name="tickets",
+            record_id=str(ticket.id),
+        ), user_session)
 
     return ticket
 
@@ -121,7 +131,7 @@ async def create_ticket(
 async def get_ticket(
     db: AsyncSession,
     ticket_id: int,
-    viewer_personnel_id: Optional[int] = None,  # set when ICT views their own ticket
+    viewer_personnel_id: Optional[int] = None,
     user_session: Optional[UserSession] = None,
 ) -> Optional[Ticket]:
     result = await db.execute(select(Ticket).where(Ticket.id == ticket_id))
@@ -155,8 +165,8 @@ async def list_tickets(
     db: AsyncSession,
     skip: int = 0,
     limit: int = 50,
-    staff_id: Optional[UUID] = None,          # regular staff sees only their own
-    assigned_to_id: Optional[int] = None,     # ICT sees only their assigned
+    staff_id: Optional[UUID] = None,
+    assigned_to_id: Optional[int] = None,
 ) -> list[Ticket]:
     stmt = select(Ticket).order_by(Ticket.created_at.asc())
 
@@ -170,22 +180,32 @@ async def list_tickets(
     return result.scalars().all()
 
 
+# CHANGE 5: New helper — admin view of unassigned open tickets.
+async def list_queued_tickets(db: AsyncSession) -> list[Ticket]:
+    """Admin: tickets queued without assignment (no tech was available at creation)."""
+    result = await db.execute(
+        select(Ticket).where(
+            Ticket.assigned_to_id == None,  # noqa: E711 — SQLAlchemy requires == None
+            Ticket.status == TicketStatus.open,
+        ).order_by(Ticket.created_at.asc())
+    )
+    return result.scalars().all()
+
+
 async def update_ticket(
     db: AsyncSession,
     ticket_id: int,
     data: TicketUpdate,
-    acting_personnel_id: int,  # must be the assigned technician
+    acting_personnel_id: int,
     user_session: UserSession,
 ) -> Optional[Ticket]:
     ticket = await get_ticket(db, ticket_id)
     if not ticket:
         return None
 
-    # Only the assigned technician can update
     if ticket.assigned_to_id != acting_personnel_id:
         raise PermissionError("You can only update tickets assigned to you.")
 
-    # FIFO enforcement
     if data.status in (TicketStatus.resolved, TicketStatus.unresolved):
         oldest_result = await db.execute(
             select(func.min(Ticket.id)).where(
@@ -202,7 +222,6 @@ async def update_ticket(
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(ticket, field, value)
 
-    # Both resolved and unresolved auto-close and release the technician
     if ticket.status in (TicketStatus.resolved, TicketStatus.unresolved):
         ticket.status = TicketStatus.closed
         ticket.closed_at = datetime.now(timezone.utc)
@@ -237,17 +256,24 @@ async def update_ticket(
     return ticket
 
 
+# CHANGE 4: Raises clean ValueError (no tech) or LookupError (ticket not found)
+# so the route handler can map them to distinct HTTP codes.
 async def reassign_ticket(
     db: AsyncSession,
     ticket_id: int,
     user_session: UserSession,
 ) -> Ticket:
-    """Admin-only: reassign a closed/unresolved ticket to the next available technician."""
+    """Admin-only: assign a queued or closed ticket to the next available technician."""
     ticket = await get_ticket(db, ticket_id)
     if not ticket:
-        raise ValueError(f"Ticket #{ticket_id} not found.")
+        raise LookupError(f"Ticket #{ticket_id} not found.")
 
     personnel = await _auto_assign(db, ticket.category)
+    if not personnel:
+        raise ValueError(
+            f"No available ICT personnel for category '{ticket.category}'. "
+            "Ticket remains queued."
+        )
 
     ticket.assigned_to_id = personnel.id
     ticket.status = TicketStatus.open
@@ -283,7 +309,7 @@ async def get_stuck_tickets(
     db: AsyncSession,
     threshold_hours: int = 24,
 ) -> list[Ticket]:
-    """Tickets that are open/in_progress/unresolved beyond the threshold."""
+    """Tickets open/in_progress/unresolved beyond the threshold."""
     cutoff = datetime.now(timezone.utc) - timedelta(hours=threshold_hours)
     result = await db.execute(
         select(Ticket).where(
