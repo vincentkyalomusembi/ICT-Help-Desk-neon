@@ -33,7 +33,7 @@ class Ticket(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     staff_id: UUID = Field(foreign_key="staff.id")
-    assigned_to_id: int = Field(foreign_key="ict_personnel.id")  # never null
+    assigned_to_id: Optional[int] = Field(default=None, foreign_key="ict_personnel.id", nullable=True)
     title: str
     description: str
     category: TicketCategory
