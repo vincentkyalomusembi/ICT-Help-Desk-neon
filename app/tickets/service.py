@@ -39,7 +39,6 @@ async def _auto_assign(db: AsyncSession, category: TicketCategory) -> Optional[i
     if not candidates:
         return None
 
-    # Pick least loaded — fewest open tickets
     least_loaded = None
     min_tickets = float("inf")
 
@@ -74,7 +73,6 @@ async def create_ticket(db: AsyncSession, data: TicketCreate, staff_id: UUID) ->
     )
     db.add(ticket)
 
-    # Set assigned personnel to busy if assigned
     if assigned_to_id:
         result = await db.execute(
             select(IctPersonnel).where(IctPersonnel.id == assigned_to_id)
@@ -109,7 +107,6 @@ async def update_ticket(db: AsyncSession, ticket_id: int, data: TicketUpdate) ->
     if ticket.status == TicketStatus.resolved:
         ticket.resolved_at = datetime.now(timezone.utc)
 
-        # Free up the ICT personnel when ticket is resolved
         if ticket.assigned_to_id:
             result = await db.execute(
                 select(IctPersonnel).where(IctPersonnel.id == ticket.assigned_to_id)
