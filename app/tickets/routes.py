@@ -20,7 +20,7 @@ async def create(
     session: AsyncSession = Depends(get_db),
 ):
     try:
-        return await create_ticket(session, ticket, current_staff.id, current_staff.session)
+        return await create_ticket(session, ticket, current_staff.id, current_staff._session)
     except RuntimeError as e:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
 
@@ -63,7 +63,7 @@ async def read(
         if current_staff.role == "ICT_PERSONNEL" and current_staff.ict_profile
         else None
     )
-    ticket = await get_ticket(session, ticket_id, personnel_id, current_staff.session)
+    ticket = await get_ticket(session, ticket_id, personnel_id, current_staff._session)
     if not ticket:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
     return ticket
@@ -78,9 +78,11 @@ async def update(
 ):
     try:
         updated = await update_ticket(
-            session, ticket_id, ticket,
+            session,
+            ticket_id,
+            ticket,
             current_staff.ict_profile.id,
-            current_staff.session,
+            current_staff._session,
         )
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
@@ -98,7 +100,7 @@ async def reassign(
     session: AsyncSession = Depends(get_db),
 ):
     try:
-        return await reassign_ticket(session, ticket_id, current_staff.session)
+        return await reassign_ticket(session, ticket_id, current_staff._session)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except RuntimeError as e:
@@ -114,3 +116,4 @@ async def delete(
     success = await delete_ticket(session, ticket_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
+
