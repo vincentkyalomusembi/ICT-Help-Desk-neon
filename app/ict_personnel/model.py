@@ -29,8 +29,8 @@ class IctPersonnel(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     staff_id: UUID = Field(foreign_key="staff.id", unique=True) 
-    specialization: Specialization = Field(default=Specialization.hardware)
-    availability: Availability = Field(default=Availability.available)
+    specialization: Specialization = Field(default=Specialization.hardware, sa_column_kwargs={"nullable": False})
+    availability: Availability = Field(default=Availability.available, sa_column_kwargs={"nullable": False})
     phone_extension: Optional[str] = Field(default=None, max_length=10)
     is_active: bool = Field(default=True)
 

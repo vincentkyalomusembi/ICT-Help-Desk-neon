@@ -40,8 +40,8 @@ class Ticket(SQLModel, table=True):
     )  # None means queued — no matching specialist available at creation time
     title: str
     description: str
-    category: TicketCategory
-    status: TicketStatus = Field(default=TicketStatus.open)
+    category: TicketCategory = Field(sa_column_kwargs={"nullable": False})
+    status: TicketStatus = Field(default=TicketStatus.open, sa_column_kwargs={"nullable": False})
     comment: Optional[str] = Field(default=None, nullable=True)  # compulsory on UNRESOLVED
     created_at: datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())

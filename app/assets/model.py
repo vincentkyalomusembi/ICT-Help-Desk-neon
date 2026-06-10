@@ -38,11 +38,11 @@ class Asset(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     asset_tag: str = Field(max_length=50, unique=True, index=True)
     serial_number: str = Field(max_length=100, unique=True, index=True)
-    device_type: DeviceType
+    device_type: DeviceType = Field(sa_column_kwargs={"nullable": False})
+    classification: AssetClassification = Field(sa_column_kwargs={"nullable": False})
+    condition: AssetCondition = Field(default=AssetCondition.good, sa_column_kwargs={"nullable": False})
     brand: str = Field(max_length=50)
     model: str = Field(max_length=100)
-    classification: AssetClassification
-    condition: AssetCondition = Field(default=AssetCondition.good)
     purchase_date: Optional[date] = Field(default=None)
     warranty_expiry: Optional[date] = Field(default=None)
     created_at: datetime = Field(

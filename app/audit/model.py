@@ -33,7 +33,7 @@ class AuditLog(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     staff_id: Optional[UUID] = Field(default=None, foreign_key="staff.id")
     session_id: Optional[int] = Field(default=None, foreign_key="sessions.id")
-    action: AuditAction
+    action: AuditAction = Field(sa_column_kwargs={"nullable": False})
     table_name: str = Field(max_length=50, index=True)
     record_id: Optional[str] = Field(default=None, max_length=50)  # str to handle both int and UUID
     ip_address: Optional[str] = Field(default=None, max_length=45)
