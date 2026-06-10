@@ -20,14 +20,16 @@ class TicketUpdate(BaseModel):
     @model_validator(mode="after")
     def comment_required_for_unresolved(self) -> "TicketUpdate":
         if self.status == TicketStatus.unresolved and not self.comment:
-            raise ValueError("A comment is required when marking a ticket as unresolved.")
+            raise ValueError(
+                "A comment is required when marking a ticket as unresolved."
+            )
         return self
 
 
 class TicketResponse(BaseModel):
     id: int
     staff_id: UUID
-    assigned_to_id: Optional[int] = None 
+    assigned_to_id: Optional[int] = None  # None means queued
     title: str
     description: str
     category: TicketCategory
@@ -41,8 +43,8 @@ class TicketResponse(BaseModel):
 
 
 class TicketAdminResponse(TicketResponse):
-    assigned_to_name: Optional[str] = None
-
     @property
     def age_hours(self) -> float:
-        return (datetime.now(timezone.utc) - self.created_at).total_seconds() / 3600
+        return (
+            datetime.now(timezone.utc) - self.created_at
+        ).total_seconds() / 3600

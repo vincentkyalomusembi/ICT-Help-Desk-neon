@@ -33,7 +33,11 @@ class Ticket(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     staff_id: UUID = Field(foreign_key="staff.id")
-    assigned_to_id: Optional[int] = Field(default=None, foreign_key="ict_personnel.id", nullable=True)
+    assigned_to_id: Optional[int] = Field(
+        default=None,
+        foreign_key="ict_personnel.id",
+        nullable=True
+    )  # None means queued — no matching specialist available at creation time
     title: str
     description: str
     category: TicketCategory
@@ -47,4 +51,4 @@ class Ticket(SQLModel, table=True):
     )
 
     staff: Optional["Staff"] = Relationship(back_populates="tickets")
-    assigned_to: "IctPersonnel" = Relationship(back_populates="assigned_tickets")
+    assigned_to: Optional["IctPersonnel"] = Relationship(back_populates="assigned_tickets")

@@ -64,7 +64,7 @@ async def get_current_staff(
         .where(Staff.id == db_session.staff_id)
         .options(
             selectinload(Staff.department),
-            selectinload(Staff.ict_profile),  # needed for ICT role checks
+            selectinload(Staff.ict_profile),
         )
     )
     staff = result.scalar_one_or_none()
@@ -75,9 +75,7 @@ async def get_current_staff(
             detail="Staff account no longer exists.",
         )
 
-    # Attach the current session onto the staff object so
-    # downstream services (tickets, audit) can access it directly
-    staff._session = db_session
+    # No _session attachment — session is injected separately per route
     return staff
 
 
@@ -114,6 +112,8 @@ async def require_ict(
     return current
 
 
+# Type aliases
 CurrentStaff = Annotated[Staff, Depends(get_current_active_staff)]
 AdminStaff = Annotated[Staff, Depends(require_admin)]
 IctStaff = Annotated[Staff, Depends(require_ict)]
+CurrentSession = Annotated[DBSession, Depends(get_current_session)]
