@@ -43,6 +43,12 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
             detail=f"Account is locked until {staff.locked_until.isoformat()}. Please contact an administrator.",
         )
 
+    if not staff.is_activated:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is not activated. Please verify your email address to activate your account.",
+        )
+
     if not verify_password(payload.password, staff.password_hash):
         staff.failed_attempts += 1
         if staff.failed_attempts >= 5:
@@ -55,7 +61,6 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
             else "Account has been locked due to too many failed attempts."
         )
 
-        # Log failed login — no session exists yet, so we log with ip only
         await audit_service.create_system(
             session=db,
             log_in=AuditLogCreate(
@@ -90,7 +95,6 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
     await db.commit()
     await db.refresh(session)
 
-    # Log successful login — session exists so we pass it in
     await audit_service.create(
         session=db,
         log_in=AuditLogCreate(
@@ -128,7 +132,6 @@ async def logout(db: AsyncSession, token: str) -> None:
     db.add(session)
     await db.commit()
 
-    # Log logout
     await audit_service.create(
         session=db,
         log_in=AuditLogCreate(
@@ -157,7 +160,6 @@ async def logout_all(db: AsyncSession, staff_id: UUID) -> int:
 
     await db.commit()
 
-    # Log one entry per session terminated
     for s in sessions:
         await audit_service.create(
             session=db,
