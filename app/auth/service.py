@@ -46,7 +46,7 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
     if not staff.is_activated:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is not activated. Please contact an administrator.",
+            detail="Account is not activated. Please verify your email address to activate your account.",
         )
 
     if not verify_password(payload.password, staff.password_hash):
