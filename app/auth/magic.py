@@ -50,8 +50,18 @@ async def verify_magic_token(db: AsyncSession, token: str) -> None:
 async def resend_magic_token(db: AsyncSession, email: str) -> None:
     result = await db.execute(select(Staff).where(Staff.email == email))
     staff = result.scalar_one_or_none()
-    # Return silently even if email not found to avoid user enumeration
-    if not staff or staff.is_activated:
-        return
+
+    if not staff:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with that email. Please register first.",
+        )
+
+    if staff.is_activated:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Account is already activated.",
+        )
+
     token = await create_magic_token(db, staff.id)
     await send_magic_link(staff.email, staff.full_name, token)

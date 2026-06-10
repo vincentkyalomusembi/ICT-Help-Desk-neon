@@ -9,7 +9,7 @@ from fastapi import HTTPException, status
 
 from app.staff.model import Staff, Directorate, Department
 from app.staff.schemas import (
-    StaffCreate, StaffUpdate,
+    StaffCreate, StaffUpdate, StaffCreateResponse,
     DirectorateCreate, DirectorateUpdate,
     DepartmentCreate, DepartmentUpdate,
 )
@@ -102,7 +102,7 @@ class StaffService:
 
     # Staff CRUD
 
-    async def create_staff(self, payload: StaffCreate) -> Staff:
+    async def create_staff(self, payload: StaffCreate) -> StaffCreateResponse:
         await self._assert_unique_field("personal_number", payload.personal_number)
         await self._assert_unique_field("email", payload.email)
 
@@ -114,7 +114,6 @@ class StaffService:
             phone_number=payload.phone_number,
             directorate_id=payload.directorate_id,
             department_id=payload.department_id,
-            job_title=payload.job_title,
             office_location=payload.office_location,
             office_number=payload.office_number,
             role=payload.role,
@@ -136,7 +135,11 @@ class StaffService:
                 exc_info=True,
             )
 
-        return staff
+        return StaffCreateResponse(
+            message="Account created successfully. Check your email to activate your account.",
+            staff_id=staff.id,
+            email=staff.email,
+        )
 
     async def get_staff_by_id(self, staff_id: UUID) -> Staff:
         return await self._get_or_404(staff_id)

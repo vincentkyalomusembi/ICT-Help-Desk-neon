@@ -8,7 +8,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_staff
 from app.staff.model import Staff, UserRole
 from app.staff.schemas import (
-    StaffCreate, StaffResponse, StaffUpdate, PasswordChangeRequest,
+    StaffCreate, StaffCreateResponse, StaffResponse, StaffUpdate, PasswordChangeRequest,
     DirectorateCreate, DirectorateUpdate, DirectorateResponse,
     DepartmentCreate, DepartmentUpdate, DepartmentResponse,
 )
@@ -32,16 +32,14 @@ def verify_admin_or_self(staff_id: UUID, current: Staff) -> None:
         )
 
 
-
-#  STAFF ROUTES
-
+# STAFF ROUTES
 
 staff_router = APIRouter(prefix="/staff", tags=["Staff"])
 
 
 @staff_router.post(
     "/",
-    response_model=StaffResponse,
+    response_model=StaffCreateResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Register a new staff member (open)",
 )
@@ -147,9 +145,7 @@ async def change_password(
     )
 
 
-
-#  DIRECTORATE ROUTES
-
+# DIRECTORATE ROUTES
 
 directorate_router = APIRouter(prefix="/directorates", tags=["Directorates"])
 
@@ -177,7 +173,6 @@ async def list_directorates(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     session: AsyncSession = Depends(get_db),
-
 ):
     return await StaffService(session).list_directorates(skip=skip, limit=limit)
 
@@ -190,7 +185,6 @@ async def list_directorates(
 async def get_directorate(
     directorate_id: int,
     session: AsyncSession = Depends(get_db),
-    
 ):
     return await StaffService(session).get_directorate_by_id(directorate_id)
 
@@ -238,8 +232,7 @@ async def delete_directorate(
     await StaffService(session).delete_directorate(directorate_id)
 
 
-#  DEPARTMENT ROUTES
-
+# DEPARTMENT ROUTES
 
 department_router = APIRouter(prefix="/departments", tags=["Departments"])
 

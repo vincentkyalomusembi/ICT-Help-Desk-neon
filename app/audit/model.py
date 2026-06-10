@@ -1,9 +1,9 @@
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column
+from sqlalchemy import Column, func
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from typing import Optional, TYPE_CHECKING
 from datetime import datetime
-from uuid import UUID  
+from uuid import UUID
 import enum
 
 if TYPE_CHECKING:
@@ -32,14 +32,18 @@ class AuditLog(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     staff_id: Optional[UUID] = Field(default=None, foreign_key="staff.id")
-    session_id: Optional[int] = Field(default=None, foreign_key="sessions.id") 
-    action: AuditAction
+    session_id: Optional[int] = Field(default=None, foreign_key="sessions.id")
+    action: AuditAction = Field(sa_column_kwargs={"nullable": False})
     table_name: str = Field(max_length=50, index=True)
-    record_id: Optional[int] = Field(default=None)
-    ip_address: str = Field(default=None, max_length=45)  
+    record_id: Optional[str] = Field(default=None, max_length=50)  # str to handle both int and UUID
+    ip_address: Optional[str] = Field(default=None, max_length=45)
     mac_address: Optional[str] = Field(default=None, max_length=17)
     created_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            nullable=False,
+            server_default=func.now()
+        )
     )
 
     staff: Optional["Staff"] = Relationship(back_populates="audit_logs")
