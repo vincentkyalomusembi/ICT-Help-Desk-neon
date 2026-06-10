@@ -27,7 +27,7 @@ class TicketUpdate(BaseModel):
 class TicketResponse(BaseModel):
     id: int
     staff_id: UUID
-    assigned_to_id: int
+    assigned_to_id: Optional[int] = None 
     title: str
     description: str
     category: TicketCategory
