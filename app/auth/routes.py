@@ -1,9 +1,7 @@
 from uuid import UUID
 from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.database import get_db
 from app.core.dependencies import get_current_staff
 from app.core.config import settings
@@ -11,6 +9,8 @@ from app.staff.model import Staff, UserRole
 from app.auth.schemas import LoginRequest, LoginResponse, SessionResponse
 from app.auth import service
 from app.auth.magic import verify_magic_token, resend_magic_token
+from app.auth.password_reset import request_password_reset, reset_password
+from app.staff.schemas import PasswordResetRequest, PasswordResetConfirm
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -162,3 +162,29 @@ async def resend_verification(
 ):
     await resend_magic_token(db, email)
     return {"message": "Verification email resent. Please check your inbox."}
+
+
+@router.post(
+    "/forgot-password",
+    status_code=status.HTTP_200_OK,
+    summary="Request a password reset link",
+)
+async def forgot_password(
+    payload: PasswordResetRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    await request_password_reset(session, payload.email)
+    return {"message": "Password reset link sent. Check your email."}
+
+
+@router.post(
+    "/reset-password",
+    status_code=status.HTTP_200_OK,
+    summary="Reset password using token from email",
+)
+async def confirm_reset_password(
+    payload: PasswordResetConfirm,
+    session: AsyncSession = Depends(get_db),
+):
+    await reset_password(session, payload.token, payload.new_password)
+    return {"message": "Password reset successful. You can now log in."}

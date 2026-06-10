@@ -1,8 +1,9 @@
-from pydantic import BaseModel, EmailStr, model_validator
+from pydantic import BaseModel, EmailStr, field_validator, model_validator
 from typing import Optional
 from datetime import datetime
 from uuid import UUID
 from app.staff.model import UserRole
+from app.core.security import validate_password_strength
 
 
 # Directorate
@@ -73,6 +74,11 @@ class StaffCreate(BaseModel):
     password: str
     confirm_password: str
 
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        return validate_password_strength(v)
+
     @model_validator(mode="after")
     def passwords_match(self) -> "StaffCreate":
         if self.password != self.confirm_password:
@@ -121,8 +127,34 @@ class PasswordChangeRequest(BaseModel):
     new_password: str
     confirm_new_password: str
 
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        return validate_password_strength(v)
+
     @model_validator(mode="after")
     def new_passwords_match(self) -> "PasswordChangeRequest":
+        if self.new_password != self.confirm_new_password:
+            raise ValueError("new_password and confirm_new_password do not match.")
+        return self
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+    confirm_new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        return validate_password_strength(v)
+
+    @model_validator(mode="after")
+    def passwords_match(self) -> "PasswordResetConfirm":
         if self.new_password != self.confirm_new_password:
             raise ValueError("new_password and confirm_new_password do not match.")
         return self
