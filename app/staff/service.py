@@ -5,6 +5,7 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
+from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 
 from app.staff.model import Staff, Directorate, Department, UserRole
@@ -142,7 +143,15 @@ class StaffService:
         )
 
     async def get_staff_by_id(self, staff_id: UUID) -> Staff:
-        return await self._get_or_404(staff_id)
+        stmt = select(Staff).where(Staff.id == staff_id).options(selectinload(Staff.department))
+        result = await self.session.execute(stmt)
+        staff = result.scalar_one_or_none()
+        if not staff:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Staff with id '{staff_id}' not found.",
+            )
+        return staff
 
     async def get_staff_by_email(self, email: str) -> Optional[Staff]:
         result = await self.session.execute(select(Staff).where(Staff.email == email))
@@ -162,7 +171,7 @@ class StaffService:
         directorate_id: Optional[int] = None,
         department_id: Optional[int] = None,
     ) -> list[Staff]:
-        stmt = select(Staff)
+        stmt = select(Staff).options(selectinload(Staff.department))
         if directorate_id is not None:
             stmt = stmt.where(Staff.directorate_id == directorate_id)
         if department_id is not None:
