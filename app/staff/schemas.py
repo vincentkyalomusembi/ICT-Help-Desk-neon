@@ -4,6 +4,8 @@ from datetime import datetime
 from uuid import UUID
 from app.staff.model import UserRole
 from app.core.security import validate_password_strength
+from app.ict_personnel.model import Specialization
+
 
 
 # Directorate
@@ -82,7 +84,7 @@ class StaffCreate(BaseModel):
     @model_validator(mode="after")
     def passwords_match(self) -> "StaffCreate":
         if self.password != self.confirm_password:
-            raise ValueError("password and confirm_password do not match.")
+            raise ValueError("Passwords do not match.")
         return self
 
 
@@ -100,6 +102,13 @@ class StaffUpdate(BaseModel):
     directorate_id: Optional[int] = None
     department_id: Optional[int] = None
     role: Optional[UserRole] = None
+    specialization: Optional[Specialization] = None  # required when role = ICT_PERSONNEL
+
+    @model_validator(mode="after")
+    def check_specialization(self) -> "StaffUpdate":
+        if self.role == UserRole.ict_personnel and self.specialization is None:
+            raise ValueError("specialization is required when setting role to ICT_PERSONNEL.")
+        return self
 
 
 class StaffResponse(BaseModel):
@@ -135,7 +144,7 @@ class PasswordChangeRequest(BaseModel):
     @model_validator(mode="after")
     def new_passwords_match(self) -> "PasswordChangeRequest":
         if self.new_password != self.confirm_new_password:
-            raise ValueError("new_password and confirm_new_password do not match.")
+            raise ValueError("Passwords do not match.")
         return self
 
 
@@ -156,5 +165,5 @@ class PasswordResetConfirm(BaseModel):
     @model_validator(mode="after")
     def passwords_match(self) -> "PasswordResetConfirm":
         if self.new_password != self.confirm_new_password:
-            raise ValueError("new_password and confirm_new_password do not match.")
+            raise ValueError("Passwords do not match.")
         return self
