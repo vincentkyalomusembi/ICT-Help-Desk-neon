@@ -25,7 +25,7 @@ class StaffService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    # Staff helpers
+    # ── Helpers ───────────────────────────────────────────────
 
     async def _get_or_404(self, staff_id: UUID) -> Staff:
         staff = await self.session.get(Staff, staff_id)
@@ -53,8 +53,6 @@ class StaffService:
                 detail=f"A staff member with {field_name} '{value}' already exists.",
             )
 
-    # Directorate helpers
-
     async def _get_directorate_or_404(self, directorate_id: int) -> Directorate:
         obj = await self.session.get(Directorate, directorate_id)
         if not obj:
@@ -76,8 +74,6 @@ class StaffService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Directorate with name '{name}' already exists.",
             )
-
-    # Department helpers
 
     async def _get_department_or_404(self, department_id: int) -> Department:
         obj = await self.session.get(Department, department_id)
@@ -101,7 +97,7 @@ class StaffService:
                 detail=f"Department with name '{name}' already exists.",
             )
 
-    # Staff CRUD
+    # ── Staff CRUD ────────────────────────────────────────────
 
     async def create_staff(self, payload: StaffCreate) -> StaffCreateResponse:
         await self._assert_unique_field("personal_number", payload.personal_number)
@@ -143,7 +139,11 @@ class StaffService:
         )
 
     async def get_staff_by_id(self, staff_id: UUID) -> Staff:
-        stmt = select(Staff).where(Staff.id == staff_id).options(selectinload(Staff.department))
+        stmt = (
+            select(Staff)
+            .where(Staff.id == staff_id)
+            .options(selectinload(Staff.department))
+        )
         result = await self.session.execute(stmt)
         staff = result.scalar_one_or_none()
         if not staff:
@@ -154,10 +154,14 @@ class StaffService:
         return staff
 
     async def get_staff_by_email(self, email: str) -> Optional[Staff]:
-        result = await self.session.execute(select(Staff).where(Staff.email == email))
+        result = await self.session.execute(
+            select(Staff).where(Staff.email == email)
+        )
         return result.scalar_one_or_none()
 
-    async def get_staff_by_personal_number(self, personal_number: str) -> Optional[Staff]:
+    async def get_staff_by_personal_number(
+        self, personal_number: str
+    ) -> Optional[Staff]:
         result = await self.session.execute(
             select(Staff).where(Staff.personal_number == personal_number)
         )
@@ -185,14 +189,13 @@ class StaffService:
         old_role = staff.role
 
         update_data = payload.model_dump(exclude_unset=True)
-        specialization = update_data.pop("specialization", None)  # remove from staff fields
 
         for field, value in update_data.items():
             setattr(staff, field, value)
 
         new_role = staff.role
 
-        # --- Role transition: TO ICT_PERSONNEL ---
+        # ── Role transition: STAFF/ADMIN → ICT_PERSONNEL ──────
         if new_role == UserRole.ict_personnel and old_role != UserRole.ict_personnel:
             from app.ict_personnel.model import IctPersonnel, Availability
 
@@ -202,19 +205,21 @@ class StaffService:
             existing = result.scalar_one_or_none()
 
             if existing is None:
+                # Fresh profile — inactive until ICT personnel completes setup
                 ict = IctPersonnel(
                     staff_id=staff_id,
-                    specialization=specialization,
+                    specialization=None,
                     availability=Availability.available,
-                    is_active=True,
+                    is_active=False,
                 )
                 self.session.add(ict)
             else:
-                existing.is_active = True
-                existing.specialization = specialization
+                # Previously had a profile — reset for re-onboarding
+                existing.specialization = None
+                existing.is_active = False
                 self.session.add(existing)
 
-        # --- Role transition: FROM ICT_PERSONNEL ---
+        # ── Role transition: ICT_PERSONNEL → STAFF/ADMIN ──────
         elif old_role == UserRole.ict_personnel and new_role != UserRole.ict_personnel:
             from app.ict_personnel.model import IctPersonnel
             from app.tickets.model import Ticket, TicketStatus
@@ -226,16 +231,22 @@ class StaffService:
 
             if personnel is not None:
                 # Block demotion if they have active tickets
-                active_tickets = await self.session.execute(
+                active_result = await self.session.execute(
                     select(Ticket).where(
                         Ticket.assigned_to_id == personnel.id,
-                        Ticket.status.in_([TicketStatus.open, TicketStatus.in_progress])
+                        Ticket.status.in_([
+                            TicketStatus.open,
+                            TicketStatus.in_progress,
+                        ])
                     )
                 )
-                if active_tickets.scalars().first() is not None:
+                if active_result.scalars().first() is not None:
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
-                        detail="Cannot demote: technician has active tickets. Reassign them first.",
+                        detail=(
+                            "Cannot demote: technician has active tickets. "
+                            "Reassign them first."
+                        ),
                     )
                 personnel.is_active = False
                 self.session.add(personnel)
@@ -251,7 +262,10 @@ class StaffService:
         await self.session.commit()
 
     async def change_password(
-        self, staff_id: UUID, current_password: str, new_password: str
+        self,
+        staff_id: UUID,
+        current_password: str,
+        new_password: str,
     ) -> Staff:
         staff = await self._get_or_404(staff_id)
         if not verify_password(current_password, staff.password_hash):
@@ -276,7 +290,9 @@ class StaffService:
     ) -> Staff:
         staff.failed_attempts += 1
         if staff.failed_attempts >= lock_after:
-            staff.locked_until = datetime.now(timezone.utc) + timedelta(minutes=lock_minutes)
+            staff.locked_until = datetime.now(timezone.utc) + timedelta(
+                minutes=lock_minutes
+            )
         self.session.add(staff)
         await self.session.commit()
         await self.session.refresh(staff)
@@ -296,7 +312,7 @@ class StaffService:
             return False
         return datetime.now(timezone.utc) < staff.locked_until
 
-    # Directorate CRUD
+    # ── Directorate CRUD ──────────────────────────────────────
 
     async def create_directorate(self, payload: DirectorateCreate) -> Directorate:
         await self._assert_directorate_name_unique(payload.name)
@@ -322,7 +338,9 @@ class StaffService:
         obj = await self._get_directorate_or_404(directorate_id)
         data = payload.model_dump(exclude_unset=True)
         if "name" in data and data["name"] != obj.name:
-            await self._assert_directorate_name_unique(data["name"], exclude_id=directorate_id)
+            await self._assert_directorate_name_unique(
+                data["name"], exclude_id=directorate_id
+            )
         for field, value in data.items():
             setattr(obj, field, value)
         self.session.add(obj)
@@ -335,7 +353,7 @@ class StaffService:
         await self.session.delete(obj)
         await self.session.commit()
 
-    # Department CRUD
+    # ── Department CRUD ───────────────────────────────────────
 
     async def create_department(self, payload: DepartmentCreate) -> Department:
         await self._get_directorate_or_404(payload.directorate_id)
@@ -373,7 +391,9 @@ class StaffService:
         obj = await self._get_department_or_404(department_id)
         data = payload.model_dump(exclude_unset=True)
         if "name" in data and data["name"] != obj.name:
-            await self._assert_department_name_unique(data["name"], exclude_id=department_id)
+            await self._assert_department_name_unique(
+                data["name"], exclude_id=department_id
+            )
         if "directorate_id" in data:
             await self._get_directorate_or_404(data["directorate_id"])
         for field, value in data.items():
