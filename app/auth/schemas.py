@@ -17,6 +17,15 @@ class LoginResponse(BaseModel):
     expires_at: datetime
 
 
+class StaffBasic(BaseModel):
+    id: UUID
+    full_name: str
+    email: str
+
+    class Config:
+        from_attributes = True
+
+
 class SessionResponse(BaseModel):
     id: int
     staff_id: UUID
@@ -25,6 +34,7 @@ class SessionResponse(BaseModel):
     login_at: datetime
     expires_at: datetime
     is_active: bool
+    staff: Optional[StaffBasic] = None
 
     class Config:
         from_attributes = True

@@ -5,9 +5,10 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
+from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 
-from app.staff.model import Staff, Directorate, Department
+from app.staff.model import Staff, Directorate, Department, UserRole
 from app.staff.schemas import (
     StaffCreate, StaffUpdate, StaffCreateResponse,
     DirectorateCreate, DirectorateUpdate,
@@ -142,7 +143,15 @@ class StaffService:
         )
 
     async def get_staff_by_id(self, staff_id: UUID) -> Staff:
-        return await self._get_or_404(staff_id)
+        stmt = select(Staff).where(Staff.id == staff_id).options(selectinload(Staff.department))
+        result = await self.session.execute(stmt)
+        staff = result.scalar_one_or_none()
+        if not staff:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Staff with id '{staff_id}' not found.",
+            )
+        return staff
 
     async def get_staff_by_email(self, email: str) -> Optional[Staff]:
         result = await self.session.execute(select(Staff).where(Staff.email == email))
@@ -162,7 +171,7 @@ class StaffService:
         directorate_id: Optional[int] = None,
         department_id: Optional[int] = None,
     ) -> list[Staff]:
-        stmt = select(Staff)
+        stmt = select(Staff).options(selectinload(Staff.department))
         if directorate_id is not None:
             stmt = stmt.where(Staff.directorate_id == directorate_id)
         if department_id is not None:
@@ -173,8 +182,64 @@ class StaffService:
 
     async def update_staff(self, staff_id: UUID, payload: StaffUpdate) -> Staff:
         staff = await self._get_or_404(staff_id)
-        for field, value in payload.model_dump(exclude_unset=True).items():
+        old_role = staff.role
+
+        update_data = payload.model_dump(exclude_unset=True)
+        specialization = update_data.pop("specialization", None)  # remove from staff fields
+
+        for field, value in update_data.items():
             setattr(staff, field, value)
+
+        new_role = staff.role
+
+        # --- Role transition: TO ICT_PERSONNEL ---
+        if new_role == UserRole.ict_personnel and old_role != UserRole.ict_personnel:
+            from app.ict_personnel.model import IctPersonnel, Availability
+
+            result = await self.session.execute(
+                select(IctPersonnel).where(IctPersonnel.staff_id == staff_id)
+            )
+            existing = result.scalar_one_or_none()
+
+            if existing is None:
+                ict = IctPersonnel(
+                    staff_id=staff_id,
+                    specialization=specialization,
+                    availability=Availability.available,
+                    is_active=True,
+                )
+                self.session.add(ict)
+            else:
+                existing.is_active = True
+                existing.specialization = specialization
+                self.session.add(existing)
+
+        # --- Role transition: FROM ICT_PERSONNEL ---
+        elif old_role == UserRole.ict_personnel and new_role != UserRole.ict_personnel:
+            from app.ict_personnel.model import IctPersonnel
+            from app.tickets.model import Ticket, TicketStatus
+
+            result = await self.session.execute(
+                select(IctPersonnel).where(IctPersonnel.staff_id == staff_id)
+            )
+            personnel = result.scalar_one_or_none()
+
+            if personnel is not None:
+                # Block demotion if they have active tickets
+                active_tickets = await self.session.execute(
+                    select(Ticket).where(
+                        Ticket.assigned_to_id == personnel.id,
+                        Ticket.status.in_([TicketStatus.open, TicketStatus.in_progress])
+                    )
+                )
+                if active_tickets.scalars().first() is not None:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Cannot demote: technician has active tickets. Reassign them first.",
+                    )
+                personnel.is_active = False
+                self.session.add(personnel)
+
         self.session.add(staff)
         await self.session.commit()
         await self.session.refresh(staff)
