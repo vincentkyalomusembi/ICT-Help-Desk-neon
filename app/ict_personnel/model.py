@@ -1,6 +1,8 @@
 from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import Column
+from sqlalchemy.dialects.postgresql import VARCHAR
 from typing import Optional, List, TYPE_CHECKING
-from uuid import UUID 
+from uuid import UUID
 import enum
 
 if TYPE_CHECKING:
@@ -28,12 +30,17 @@ class IctPersonnel(SQLModel, table=True):
     __tablename__ = "ict_personnel"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    staff_id: UUID = Field(foreign_key="staff.id", unique=True) 
-    specialization: Specialization = Field(default=Specialization.hardware, sa_column_kwargs={"nullable": False})
-    availability: Availability = Field(default=Availability.available, sa_column_kwargs={"nullable": False})
+    staff_id: UUID = Field(foreign_key="staff.id", unique=True)
+    specialization: Optional[Specialization] = Field(
+        default=None, nullable=True
+    )  # null until ICT personnel completes setup after first login
+    availability: Availability = Field(
+        default=Availability.available,
+        sa_column_kwargs={"nullable": False}
+    )
     phone_extension: Optional[str] = Field(default=None, max_length=10)
-    is_active: bool = Field(default=True)
+    is_active: bool = Field(default=False)
+    # False until ICT personnel sets specialization via POST /ict-personnel/me/setup
 
     staff: Optional["Staff"] = Relationship(back_populates="ict_profile")
     assigned_tickets: List["Ticket"] = Relationship(back_populates="assigned_to")
-    

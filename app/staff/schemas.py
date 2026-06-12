@@ -7,7 +7,6 @@ from app.core.security import validate_password_strength
 from app.ict_personnel.model import Specialization
 
 
-
 # Directorate
 
 class DirectorateCreate(BaseModel):
@@ -102,13 +101,8 @@ class StaffUpdate(BaseModel):
     directorate_id: Optional[int] = None
     department_id: Optional[int] = None
     role: Optional[UserRole] = None
-    specialization: Optional[Specialization] = None  # required when role = ICT_PERSONNEL
-
-    @model_validator(mode="after")
-    def check_specialization(self) -> "StaffUpdate":
-        if self.role == UserRole.ict_personnel and self.specialization is None:
-            raise ValueError("specialization is required when setting role to ICT_PERSONNEL.")
-        return self
+    # specialization removed — ICT personnel set their own after first login
+    # via POST /ict-personnel/me/setup
 
 
 class StaffResponse(BaseModel):
