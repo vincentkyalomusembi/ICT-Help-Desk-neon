@@ -42,5 +42,8 @@ class IctPersonnel(SQLModel, table=True):
     is_active: bool = Field(default=False)
     # False until ICT personnel sets specialization via POST /ict-personnel/me/setup
 
-    staff: Optional["Staff"] = Relationship(back_populates="ict_profile")
+    staff: Optional["Staff"] = Relationship(
+        back_populates="ict_profile",
+        sa_relationship_kwargs={"lazy": "joined"},
+    )
     assigned_tickets: List["Ticket"] = Relationship(back_populates="assigned_to")
