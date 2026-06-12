@@ -82,6 +82,17 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
     staff.locked_until = None
     await db.commit()
 
+    # Deactivate any existing active sessions for this staff member
+    existing = await db.execute(
+        select(DBSession).where(
+            DBSession.staff_id == staff.id,
+            DBSession.is_active == True,
+        )
+    )
+    for s in existing.scalars().all():
+        s.is_active = False
+    await db.commit()
+
     now = datetime.now(timezone.utc)
     session = DBSession(
         staff_id=staff.id,
