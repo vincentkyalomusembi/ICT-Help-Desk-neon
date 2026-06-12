@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-
+from sqlalchemy.orm import selectinload
 from app.auth.model import Session as DBSession
 from app.auth.schemas import LoginRequest
 from app.staff.model import Staff
@@ -181,7 +181,9 @@ async def logout_all(db: AsyncSession, staff_id: UUID) -> int:
 async def list_active_sessions(db: AsyncSession, staff_id: UUID) -> list[DBSession]:
     now = datetime.now(timezone.utc)
     result = await db.execute(
-        select(DBSession).where(
+        select(DBSession)
+        .options(selectinload(DBSession.staff))
+        .where(
             DBSession.staff_id == staff_id,
             DBSession.is_active == True,
             DBSession.expires_at > now,
@@ -197,7 +199,10 @@ async def list_all_sessions(
     staff_id: Optional[UUID] = None,
     active_only: bool = False,
 ) -> list[DBSession]:
-    stmt = select(DBSession)
+    stmt = (
+        select(DBSession)
+        .options(selectinload(DBSession.staff))
+    )
     if staff_id:
         stmt = stmt.where(DBSession.staff_id == staff_id)
     if active_only:
