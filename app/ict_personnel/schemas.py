@@ -15,12 +15,12 @@ class IctPersonnelUpdate(BaseModel):
     specialization: Optional[Specialization] = None
     phone_extension: Optional[str] = None
     is_active: Optional[bool] = None
-    # availability intentionally excluded — managed by ticket lifecycle only
-    # except off_duty/on_leave which go through the dedicated endpoint below
+    # availability excluded — managed by ticket lifecycle
+    # off_duty/on_leave go through /duty-status endpoint
 
 
 class IctPersonnelDutyUpdate(BaseModel):
-    """Admin-only: set a technician off duty or on leave."""
+    """Admin-only: set a technician off duty, on leave, or return them to available."""
     availability: Availability
 
     def validate_duty_status(self) -> "IctPersonnelDutyUpdate":
@@ -33,10 +33,16 @@ class IctPersonnelDutyUpdate(BaseModel):
         return self
 
 
+class IctPersonnelSetup(BaseModel):
+    """ICT personnel sets their own specialization after first login."""
+    specialization: Specialization
+    phone_extension: Optional[str] = None
+
+
 class IctPersonnelResponse(BaseModel):
     id: int
     staff_id: UUID
-    specialization: Specialization
+    specialization: Optional[Specialization] = None
     availability: Availability
     phone_extension: Optional[str] = None
     is_active: bool

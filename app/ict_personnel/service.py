@@ -1,9 +1,13 @@
 from typing import List, Optional
+from uuid import UUID
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.ict_personnel.model import IctPersonnel, Availability
-from app.ict_personnel.schemas import IctPersonnelCreate, IctPersonnelUpdate
+from app.ict_personnel.schemas import (
+    IctPersonnelCreate, IctPersonnelUpdate, IctPersonnelSetup
+)
 
 
 class IctPersonnelService:
@@ -11,14 +15,14 @@ class IctPersonnelService:
     async def create(
         self,
         session: AsyncSession,
-        payload: IctPersonnelCreate
+        payload: IctPersonnelCreate,
     ) -> IctPersonnel:
         personnel = IctPersonnel(
             staff_id=payload.staff_id,
             specialization=payload.specialization,
             availability=Availability.available,
             phone_extension=payload.phone_extension,
-            is_active=True,
+            is_active=True,  # admin-created profiles are active immediately
         )
         session.add(personnel)
         await session.commit()
@@ -31,18 +35,67 @@ class IctPersonnelService:
         skip: int = 0,
         limit: int = 50,
     ) -> List[IctPersonnel]:
-        stmt = select(IctPersonnel).order_by(IctPersonnel.id.desc()).offset(skip).limit(limit)
+        stmt = (
+            select(IctPersonnel)
+            .order_by(IctPersonnel.id.desc())
+            .offset(skip)
+            .limit(limit)
+        )
         result = await session.execute(stmt)
         return result.scalars().all()
 
     async def get(
         self,
         session: AsyncSession,
-        personnel_id: int
+        personnel_id: int,
     ) -> Optional[IctPersonnel]:
-        stmt = select(IctPersonnel).where(IctPersonnel.id == personnel_id)
-        result = await session.execute(stmt)
+        result = await session.execute(
+            select(IctPersonnel).where(IctPersonnel.id == personnel_id)
+        )
         return result.scalars().first()
+
+    async def get_by_staff_id(
+        self,
+        session: AsyncSession,
+        staff_id: UUID,
+    ) -> Optional[IctPersonnel]:
+        result = await session.execute(
+            select(IctPersonnel).where(IctPersonnel.staff_id == staff_id)
+        )
+        return result.scalars().first()
+
+    async def setup_profile(
+        self,
+        session: AsyncSession,
+        staff_id: UUID,
+        payload: IctPersonnelSetup,
+    ) -> IctPersonnel:
+        """
+        Called by ICT personnel after first login to set their specialization.
+        Activates the profile so the triage system can assign tickets to them.
+        """
+        personnel = await self.get_by_staff_id(session, staff_id)
+
+        if not personnel:
+            raise ValueError(
+                "No ICT personnel profile found. "
+                "Your account role may not have been updated yet — contact admin."
+            )
+
+        if personnel.specialization is not None:
+            raise ValueError(
+                "Specialization already set. "
+                "Use PATCH /ict-personnel/{id} to update it."
+            )
+
+        personnel.specialization = payload.specialization
+        personnel.phone_extension = payload.phone_extension
+        personnel.is_active = True  # now eligible for ticket assignment
+
+        session.add(personnel)
+        await session.commit()
+        await session.refresh(personnel)
+        return personnel
 
     async def update(
         self,
@@ -69,9 +122,8 @@ class IctPersonnelService:
         availability: Availability,
     ) -> Optional[IctPersonnel]:
         """
-        Admin-only availability control for off_duty / on_leave / returning available.
-        Will not override busy — a technician with an active ticket stays busy
-        until the ticket lifecycle releases them.
+        Admin-only. Sets off_duty, on_leave, or returns to available.
+        Cannot override busy — ticket lifecycle controls that.
         """
         personnel = await self.get(session, personnel_id)
         if personnel is None:
@@ -79,7 +131,7 @@ class IctPersonnelService:
 
         if personnel.availability == Availability.busy:
             raise ValueError(
-                f"Cannot change availability: technician has an active ticket. "
+                "Cannot change availability: technician has an active ticket. "
                 "They will be released automatically when the ticket is closed."
             )
 
@@ -92,7 +144,7 @@ class IctPersonnelService:
     async def delete(
         self,
         session: AsyncSession,
-        personnel_id: int
+        personnel_id: int,
     ) -> bool:
         personnel = await self.get(session, personnel_id)
         if personnel is None:

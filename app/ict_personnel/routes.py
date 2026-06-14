@@ -10,10 +10,32 @@ from app.ict_personnel.schemas import (
     IctPersonnelResponse,
     IctPersonnelUpdate,
     IctPersonnelDutyUpdate,
+    IctPersonnelSetup,
 )
 from app.ict_personnel.service import ict_personnel_service
 
 router = APIRouter(prefix="/ict-personnel", tags=["ICT Personnel"])
+
+
+# NOTE: /me/setup must come before /{personnel_id} to avoid
+# FastAPI matching "me" as an integer personnel_id
+
+@router.post("/me/setup", response_model=IctPersonnelResponse)
+async def setup_my_profile(
+    payload: IctPersonnelSetup,
+    current_staff: IctStaff,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    ICT personnel sets their specialization after first login.
+    Profile becomes active and eligible for ticket assignments.
+    """
+    try:
+        return await ict_personnel_service.setup_profile(
+            session, current_staff.id, payload
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.post("/", response_model=IctPersonnelResponse, status_code=status.HTTP_201_CREATED)
