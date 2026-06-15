@@ -1,8 +1,30 @@
 from pydantic import BaseModel
 from typing import Optional
 from uuid import UUID
+from datetime import datetime
 
 from app.ict_personnel.model import Specialization, Availability
+
+
+class DepartmentBasic(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
+class StaffBasic(BaseModel):
+    id: UUID
+    full_name: str
+    email: str
+    personal_number: str
+    office_number: str
+    office_location: Optional[str] = None
+    department: Optional[DepartmentBasic] = None
+
+    class Config:
+        from_attributes = True
 
 
 class IctPersonnelCreate(BaseModel):
@@ -20,7 +42,7 @@ class IctPersonnelUpdate(BaseModel):
 
 
 class IctPersonnelDutyUpdate(BaseModel):
-    """Admin-only: set a technician off duty, on leave, or return them to available."""
+    """Admin-only: set a technician off duty, on leave, or return to available."""
     availability: Availability
 
     def validate_duty_status(self) -> "IctPersonnelDutyUpdate":
@@ -46,6 +68,7 @@ class IctPersonnelResponse(BaseModel):
     availability: Availability
     phone_extension: Optional[str] = None
     is_active: bool
+    staff: Optional[StaffBasic] = None  # joined — full staff details
 
     class Config:
         from_attributes = True

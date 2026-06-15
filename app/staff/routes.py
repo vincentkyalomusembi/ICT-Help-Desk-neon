@@ -8,7 +8,8 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_staff
 from app.staff.model import Staff, UserRole
 from app.staff.schemas import (
-    StaffCreate, StaffCreateResponse, StaffResponse, StaffUpdate, PasswordChangeRequest,
+    StaffCreate, StaffCreateResponse, StaffResponse, StaffUpdate,
+    PasswordChangeRequest,
     DirectorateCreate, DirectorateUpdate, DirectorateResponse,
     DepartmentCreate, DepartmentUpdate, DepartmentResponse,
 )
@@ -32,7 +33,7 @@ def verify_admin_or_self(staff_id: UUID, current: Staff) -> None:
         )
 
 
-# STAFF ROUTES
+# ── Staff Routes ──────────────────────────────────────────────
 
 staff_router = APIRouter(prefix="/staff", tags=["Staff"])
 
@@ -41,7 +42,7 @@ staff_router = APIRouter(prefix="/staff", tags=["Staff"])
     "/",
     response_model=StaffCreateResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Register a new staff member (open)",
+    summary="Register a new staff member",
 )
 async def create_staff(
     payload: StaffCreate,
@@ -53,13 +54,21 @@ async def create_staff(
 @staff_router.get(
     "/",
     response_model=list[StaffResponse],
-    summary="List all staff (admin only)",
+    summary="List staff (admin only)",
 )
 async def list_staff(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     directorate_id: Optional[int] = Query(None),
     department_id: Optional[int] = Query(None),
+    role: Optional[UserRole] = Query(
+        None,
+        description=(
+            "Filter by role. "
+            "Omit to return all roles including ICT_PERSONNEL — used for name resolution. "
+            "Pass role=STAFF to exclude ICT personnel from the staff management page."
+        ),
+    ),
     session: AsyncSession = Depends(get_db),
     _: Staff = Depends(require_admin),
 ):
@@ -68,6 +77,7 @@ async def list_staff(
         limit=limit,
         directorate_id=directorate_id,
         department_id=department_id,
+        role=role,
     )
 
 
@@ -145,7 +155,7 @@ async def change_password(
     )
 
 
-# DIRECTORATE ROUTES
+# ── Directorate Routes ────────────────────────────────────────
 
 directorate_router = APIRouter(prefix="/directorates", tags=["Directorates"])
 
@@ -167,7 +177,7 @@ async def create_directorate(
 @directorate_router.get(
     "/",
     response_model=list[DirectorateResponse],
-    summary="List all directorates (authenticated)",
+    summary="List all directorates",
 )
 async def list_directorates(
     skip: int = Query(0, ge=0),
@@ -180,7 +190,7 @@ async def list_directorates(
 @directorate_router.get(
     "/{directorate_id}",
     response_model=DirectorateResponse,
-    summary="Get a directorate by ID (authenticated)",
+    summary="Get a directorate by ID",
 )
 async def get_directorate(
     directorate_id: int,
@@ -192,7 +202,7 @@ async def get_directorate(
 @directorate_router.get(
     "/{directorate_id}/departments",
     response_model=list[DepartmentResponse],
-    summary="List departments under a directorate (authenticated)",
+    summary="List departments under a directorate",
 )
 async def list_departments_by_directorate(
     directorate_id: int,
@@ -232,7 +242,7 @@ async def delete_directorate(
     await StaffService(session).delete_directorate(directorate_id)
 
 
-# DEPARTMENT ROUTES
+# ── Department Routes ─────────────────────────────────────────
 
 department_router = APIRouter(prefix="/departments", tags=["Departments"])
 
@@ -254,12 +264,12 @@ async def create_department(
 @department_router.get(
     "/",
     response_model=list[DepartmentResponse],
-    summary="List all departments (authenticated)",
+    summary="List all departments",
 )
 async def list_departments(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    directorate_id: Optional[int] = Query(None, description="Filter by directorate"),
+    directorate_id: Optional[int] = Query(None),
     session: AsyncSession = Depends(get_db),
 ):
     return await StaffService(session).list_departments(
@@ -270,7 +280,7 @@ async def list_departments(
 @department_router.get(
     "/{department_id}",
     response_model=DepartmentResponse,
-    summary="Get a department by ID (authenticated)",
+    summary="Get a department by ID",
 )
 async def get_department(
     department_id: int,

@@ -3,11 +3,13 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 
 from app.ict_personnel.model import IctPersonnel, Availability
 from app.ict_personnel.schemas import (
     IctPersonnelCreate, IctPersonnelUpdate, IctPersonnelSetup
 )
+from app.staff.model import Staff
 
 
 class IctPersonnelService:
@@ -27,7 +29,23 @@ class IctPersonnelService:
         session.add(personnel)
         await session.commit()
         await session.refresh(personnel)
-        return personnel
+        return await self._load(session, personnel.id)
+
+    async def _load(
+        self,
+        session: AsyncSession,
+        personnel_id: int,
+    ) -> Optional[IctPersonnel]:
+        """Load a single personnel record with staff and department joined."""
+        result = await session.execute(
+            select(IctPersonnel)
+            .options(
+                selectinload(IctPersonnel.staff)
+                .selectinload(Staff.department)
+            )
+            .where(IctPersonnel.id == personnel_id)
+        )
+        return result.scalars().first()
 
     async def list(
         self,
@@ -37,6 +55,10 @@ class IctPersonnelService:
     ) -> List[IctPersonnel]:
         stmt = (
             select(IctPersonnel)
+            .options(
+                selectinload(IctPersonnel.staff)
+                .selectinload(Staff.department)
+            )
             .order_by(IctPersonnel.id.desc())
             .offset(skip)
             .limit(limit)
@@ -49,10 +71,7 @@ class IctPersonnelService:
         session: AsyncSession,
         personnel_id: int,
     ) -> Optional[IctPersonnel]:
-        result = await session.execute(
-            select(IctPersonnel).where(IctPersonnel.id == personnel_id)
-        )
-        return result.scalars().first()
+        return await self._load(session, personnel_id)
 
     async def get_by_staff_id(
         self,
@@ -60,7 +79,12 @@ class IctPersonnelService:
         staff_id: UUID,
     ) -> Optional[IctPersonnel]:
         result = await session.execute(
-            select(IctPersonnel).where(IctPersonnel.staff_id == staff_id)
+            select(IctPersonnel)
+            .options(
+                selectinload(IctPersonnel.staff)
+                .selectinload(Staff.department)
+            )
+            .where(IctPersonnel.staff_id == staff_id)
         )
         return result.scalars().first()
 
@@ -90,12 +114,12 @@ class IctPersonnelService:
 
         personnel.specialization = payload.specialization
         personnel.phone_extension = payload.phone_extension
-        personnel.is_active = True  # now eligible for ticket assignment
+        personnel.is_active = True
 
         session.add(personnel)
         await session.commit()
         await session.refresh(personnel)
-        return personnel
+        return await self._load(session, personnel.id)
 
     async def update(
         self,
@@ -113,7 +137,7 @@ class IctPersonnelService:
         session.add(personnel)
         await session.commit()
         await session.refresh(personnel)
-        return personnel
+        return await self._load(session, personnel.id)
 
     async def set_duty_status(
         self,
@@ -139,7 +163,7 @@ class IctPersonnelService:
         session.add(personnel)
         await session.commit()
         await session.refresh(personnel)
-        return personnel
+        return await self._load(session, personnel.id)
 
     async def delete(
         self,
