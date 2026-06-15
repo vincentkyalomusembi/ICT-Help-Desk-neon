@@ -16,9 +16,9 @@ if TYPE_CHECKING:
 
 
 class UserRole(str, enum.Enum):
-    admin = "ADMIN"
-    staff = "STAFF"
-    ict_personnel = "ICT_PERSONNEL"
+    admin = "admin"
+    staff = "staff"
+    ict_personnel = "ict_personnel"
 
 
 class Directorate(SQLModel, table=True):
