@@ -12,24 +12,22 @@ if TYPE_CHECKING:
 
 
 class DeviceType(str, enum.Enum):
-    laptop = "LAPTOP"
-    desktop = "DESKTOP"
-    printer = "PRINTER"
-    monitor = "MONITOR"
-    other = "OTHER"
-
+    laptop = "laptop"
+    desktop = "desktop"
+    printer = "printer"
+    monitor = "monitor"
+    other = "other"
 
 class AssetClassification(str, enum.Enum):
-    confidential = "CONFIDENTIAL"
-    internal = "INTERNAL"
-    public = "PUBLIC"
-
+    confidential = "confidential"
+    internal = "internal"
+    public = "public"
 
 class AssetCondition(str, enum.Enum):
-    good = "GOOD"
-    fair = "FAIR"
-    poor = "POOR"
-    decommissioned = "DECOMMISSIONED"
+    good = "good"
+    fair = "fair"
+    poor = "poor"
+    decommissioned = "decommissioned"
 
 
 class Asset(SQLModel, table=True):

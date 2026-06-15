@@ -12,18 +12,17 @@ if TYPE_CHECKING:
 
 
 class Specialization(str, enum.Enum):
-    hardware = "HARDWARE"
-    networking = "NETWORKING"
-    software_and_systems = "SOFTWARE_AND_SYSTEMS"
-    security = "SECURITY"
-    other = "OTHER"
-
+    hardware = "hardware"
+    networking = "networking"
+    software_and_systems = "software_and_systems"
+    security = "security"
+    other = "other"
 
 class Availability(str, enum.Enum):
-    available = "AVAILABLE"
-    busy = "BUSY"
-    off_duty = "OFF_DUTY"
-    on_leave = "ON_LEAVE"
+    available = "available"
+    busy = "busy"
+    off_duty = "off_duty"
+    on_leave = "on_leave"
 
 
 class IctPersonnel(SQLModel, table=True):
