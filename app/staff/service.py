@@ -174,12 +174,21 @@ class StaffService:
         limit: int = 50,
         directorate_id: Optional[int] = None,
         department_id: Optional[int] = None,
+        role: Optional[UserRole] = None,
     ) -> list[Staff]:
         stmt = select(Staff).options(selectinload(Staff.department))
+
+        # Filter by role if specified
+        # e.g. ?role=STAFF excludes ICT_PERSONNEL from the staff management page
+        # No filter = returns all roles including ICT — used by admin dashboard for name resolution
+        if role is not None:
+            stmt = stmt.where(Staff.role == role)
+
         if directorate_id is not None:
             stmt = stmt.where(Staff.directorate_id == directorate_id)
         if department_id is not None:
             stmt = stmt.where(Staff.department_id == department_id)
+
         stmt = stmt.offset(skip).limit(limit)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
@@ -205,7 +214,6 @@ class StaffService:
             existing = result.scalar_one_or_none()
 
             if existing is None:
-                # Fresh profile — inactive until ICT personnel completes setup
                 ict = IctPersonnel(
                     staff_id=staff_id,
                     specialization=None,
@@ -230,7 +238,6 @@ class StaffService:
             personnel = result.scalar_one_or_none()
 
             if personnel is not None:
-                # Block demotion if they have active tickets
                 active_result = await self.session.execute(
                     select(Ticket).where(
                         Ticket.assigned_to_id == personnel.id,
