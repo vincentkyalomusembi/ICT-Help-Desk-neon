@@ -12,20 +12,19 @@ if TYPE_CHECKING:
 
 
 class TicketCategory(str, enum.Enum):
-    hardware = "HARDWARE"
-    software = "SOFTWARE"
-    network = "NETWORK"
-    access_permissions = "ACCESS_PERMISSIONS"
-    security_incidents = "SECURITY_INCIDENTS"
-    other = "OTHER"
-
+    hardware = "hardware"
+    software = "software"
+    network = "network"
+    access_permissions = "access_permissions"
+    security_incidents = "security_incidents"
+    other = "other"
 
 class TicketStatus(str, enum.Enum):
-    open = "OPEN"
-    in_progress = "IN_PROGRESS"
-    resolved = "RESOLVED"
-    unresolved = "UNRESOLVED"
-    closed = "CLOSED"
+    open = "open"
+    in_progress = "in_progress"
+    resolved = "resolved"
+    unresolved = "unresolved"
+    closed = "closed"
 
 
 class Ticket(SQLModel, table=True):
