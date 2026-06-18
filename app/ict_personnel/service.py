@@ -24,7 +24,7 @@ class IctPersonnelService:
             specialization=payload.specialization,
             availability=Availability.available,
             phone_extension=payload.phone_extension,
-            is_active=True,  # admin-created profiles are active immediately
+            is_active=True,
         )
         session.add(personnel)
         await session.commit()
@@ -138,6 +138,21 @@ class IctPersonnelService:
         await session.commit()
         await session.refresh(personnel)
         return await self._load(session, personnel.id)
+
+    async def update_by_staff_id(
+        self,
+        session: AsyncSession,
+        staff_id: UUID,
+        payload: IctPersonnelUpdate,
+    ) -> Optional[IctPersonnel]:
+        """
+        Allows a technician to update their own profile using their staff_id.
+        Delegates to update() once the personnel record is located.
+        """
+        personnel = await self.get_by_staff_id(session, staff_id)
+        if personnel is None:
+            return None
+        return await self.update(session, personnel.id, payload)
 
     async def set_duty_status(
         self,
