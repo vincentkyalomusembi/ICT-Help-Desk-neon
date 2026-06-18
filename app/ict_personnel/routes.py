@@ -17,8 +17,26 @@ from app.ict_personnel.service import ict_personnel_service
 router = APIRouter(prefix="/ict-personnel", tags=["ICT Personnel"])
 
 
-# NOTE: /me/setup must come before /{personnel_id} to avoid
+# NOTE: /me and /me/setup must come before /{personnel_id} to avoid
 # FastAPI matching "me" as an integer personnel_id
+
+@router.get("/me", response_model=IctPersonnelResponse)
+async def get_my_profile(
+    current_staff: IctStaff,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Returns the ICT personnel profile for the currently authenticated technician.
+    Used by the ICT dashboard to check setup status and load availability/specialization.
+    """
+    personnel = await ict_personnel_service.get_by_staff_id(session, current_staff.id)
+    if personnel is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No ICT personnel profile found for this account."
+        )
+    return personnel
+
 
 @router.post("/me/setup", response_model=IctPersonnelResponse)
 async def setup_my_profile(
