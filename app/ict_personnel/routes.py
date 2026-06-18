@@ -17,8 +17,8 @@ from app.ict_personnel.service import ict_personnel_service
 router = APIRouter(prefix="/ict-personnel", tags=["ICT Personnel"])
 
 
-# NOTE: /me and /me/setup must come before /{personnel_id} to avoid
-# FastAPI matching "me" as an integer personnel_id
+# NOTE: /me, /me/setup, and /me (PATCH) must come before /{personnel_id}
+# to avoid FastAPI matching "me" as an integer personnel_id
 
 @router.get("/me", response_model=IctPersonnelResponse)
 async def get_my_profile(
@@ -54,6 +54,27 @@ async def setup_my_profile(
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.patch("/me", response_model=IctPersonnelResponse)
+async def update_my_profile(
+    payload: IctPersonnelUpdate,
+    current_staff: IctStaff,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Allows a technician to update their own specialization or phone extension.
+    Admin controls duty status separately via /{personnel_id}/duty-status.
+    """
+    personnel = await ict_personnel_service.update_by_staff_id(
+        session, current_staff.id, payload
+    )
+    if personnel is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="ICT personnel profile not found."
+        )
+    return personnel
 
 
 @router.post("/", response_model=IctPersonnelResponse, status_code=status.HTTP_201_CREATED)
