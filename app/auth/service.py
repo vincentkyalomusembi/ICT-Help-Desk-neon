@@ -53,6 +53,7 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
         staff.failed_attempts += 1
         if staff.failed_attempts >= 5:
             staff.locked_until = datetime.now(timezone.utc) + timedelta(minutes=settings.LOCKOUT_DURATION_MINUTES)
+        db.add(staff)
         await db.commit()
         remaining = max(0, 5 - staff.failed_attempts)
         detail = (
@@ -80,6 +81,7 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
 
     staff.failed_attempts = 0
     staff.locked_until = None
+    db.add(staff)
     await db.commit()
 
     # Deactivate any existing active sessions for this staff member
