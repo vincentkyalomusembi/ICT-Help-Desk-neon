@@ -1,8 +1,8 @@
 """initial_schema
 
-Revision ID: c20d7cd00688
+Revision ID: 32f4c79a8c73
 Revises: 
-Create Date: 2026-06-10 10:33:13.819598
+Create Date: 2026-06-18 16:01:43.351992
 
 """
 from typing import Sequence, Union
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 import sqlmodel.sql.sqltypes
 
 # revision identifiers, used by Alembic.
-revision: str = 'c20d7cd00688'
+revision: str = '32f4c79a8c73'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -27,10 +27,10 @@ def upgrade() -> None:
     sa.Column('asset_tag', sqlmodel.sql.sqltypes.AutoString(length=50), nullable=False),
     sa.Column('serial_number', sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False),
     sa.Column('device_type', sa.Enum('laptop', 'desktop', 'printer', 'monitor', 'other', name='devicetype'), nullable=False),
-    sa.Column('brand', sqlmodel.sql.sqltypes.AutoString(length=50), nullable=False),
-    sa.Column('model', sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False),
     sa.Column('classification', sa.Enum('confidential', 'internal', 'public', name='assetclassification'), nullable=False),
     sa.Column('condition', sa.Enum('good', 'fair', 'poor', 'decommissioned', name='assetcondition'), nullable=False),
+    sa.Column('brand', sqlmodel.sql.sqltypes.AutoString(length=50), nullable=False),
+    sa.Column('model', sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False),
     sa.Column('purchase_date', sa.Date(), nullable=True),
     sa.Column('warranty_expiry', sa.Date(), nullable=True),
     sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), nullable=False),
@@ -91,7 +91,7 @@ def upgrade() -> None:
     op.create_table('ict_personnel',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('staff_id', sa.Uuid(), nullable=False),
-    sa.Column('specialization', sa.Enum('hardware', 'networking', 'software_and_systems', 'security', 'other', name='specialization'), nullable=False),
+    sa.Column('specialization', sa.Enum('hardware', 'networking', 'software_and_systems', 'security', 'other', name='specialization'), nullable=True),
     sa.Column('availability', sa.Enum('available', 'busy', 'off_duty', 'on_leave', name='availability'), nullable=False),
     sa.Column('phone_extension', sqlmodel.sql.sqltypes.AutoString(length=10), nullable=True),
     sa.Column('is_active', sa.Boolean(), nullable=False),
@@ -109,6 +109,17 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_magic_link_tokens_token'), 'magic_link_tokens', ['token'], unique=True)
+    op.create_table('password_reset_tokens',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('staff_id', sa.Uuid(), nullable=False),
+    sa.Column('token', sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False),
+    sa.Column('expires_at', postgresql.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column('used', sa.Boolean(), nullable=False),
+    sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['staff_id'], ['staff.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_password_reset_tokens_token'), 'password_reset_tokens', ['token'], unique=True)
     op.create_table('sessions',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('staff_id', sa.Uuid(), nullable=False),
@@ -161,6 +172,8 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_audit_logs_table_name'), table_name='audit_logs')
     op.drop_table('audit_logs')
     op.drop_table('sessions')
+    op.drop_index(op.f('ix_password_reset_tokens_token'), table_name='password_reset_tokens')
+    op.drop_table('password_reset_tokens')
     op.drop_index(op.f('ix_magic_link_tokens_token'), table_name='magic_link_tokens')
     op.drop_table('magic_link_tokens')
     op.drop_table('ict_personnel')
