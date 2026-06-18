@@ -178,12 +178,8 @@ class StaffService:
     ) -> list[Staff]:
         stmt = select(Staff).options(selectinload(Staff.department))
 
-        # Filter by role if specified
-        # e.g. ?role=STAFF excludes ICT_PERSONNEL from the staff management page
-        # No filter = returns all roles including ICT — used by admin dashboard for name resolution
         if role is not None:
             stmt = stmt.where(Staff.role == role)
-
         if directorate_id is not None:
             stmt = stmt.where(Staff.directorate_id == directorate_id)
         if department_id is not None:
@@ -192,6 +188,42 @@ class StaffService:
         stmt = stmt.offset(skip).limit(limit)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def _ensure_ict_personnel_record(
+        self, staff_id: UUID
+    ) -> None:
+        """
+        Creates an IctPersonnel record for the given staff_id if one does not
+        already exist. Called both on fresh role transitions and as a safety net
+        when the role is already ict_personnel but the record is missing (e.g.
+        from a previously failed insert).
+        """
+        from app.ict_personnel.model import IctPersonnel, Availability
+
+        result = await self.session.execute(
+            select(IctPersonnel).where(IctPersonnel.staff_id == staff_id)
+        )
+        existing = result.scalar_one_or_none()
+
+        if existing is None:
+            logger.info(
+                f"Creating IctPersonnel record for staff {staff_id}"
+            )
+            ict = IctPersonnel(
+                staff_id=staff_id,
+                specialization=None,
+                availability=Availability.available,
+                is_active=False,
+            )
+            self.session.add(ict)
+        else:
+            # Record exists — reset for re-onboarding
+            logger.info(
+                f"Resetting existing IctPersonnel record for staff {staff_id}"
+            )
+            existing.specialization = None
+            existing.is_active = False
+            self.session.add(existing)
 
     async def update_staff(self, staff_id: UUID, payload: StaffUpdate) -> Staff:
         staff = await self._get_or_404(staff_id)
@@ -204,28 +236,27 @@ class StaffService:
 
         new_role = staff.role
 
-        # ── Role transition: STAFF/ADMIN → ICT_PERSONNEL ──────
+        logger.info(f"update_staff: {staff_id} role {old_role!r} → {new_role!r}")
+
+        # ── Fresh transition: any role → ICT_PERSONNEL ────────
         if new_role == UserRole.ict_personnel and old_role != UserRole.ict_personnel:
-            from app.ict_personnel.model import IctPersonnel, Availability
+            await self._ensure_ict_personnel_record(staff_id)
+
+        # ── Safety net: already ICT_PERSONNEL but record missing ──
+        # Handles the case where role was saved in a previous request but the
+        # IctPersonnel insert failed — re-sending the same role triggers this.
+        elif new_role == UserRole.ict_personnel and old_role == UserRole.ict_personnel:
+            from app.ict_personnel.model import IctPersonnel
 
             result = await self.session.execute(
                 select(IctPersonnel).where(IctPersonnel.staff_id == staff_id)
             )
-            existing = result.scalar_one_or_none()
-
-            if existing is None:
-                ict = IctPersonnel(
-                    staff_id=staff_id,
-                    specialization=None,
-                    availability=Availability.available,
-                    is_active=False,
+            if result.scalar_one_or_none() is None:
+                logger.warning(
+                    f"Staff {staff_id} has ict_personnel role but no profile — "
+                    f"creating now"
                 )
-                self.session.add(ict)
-            else:
-                # Previously had a profile — reset for re-onboarding
-                existing.specialization = None
-                existing.is_active = False
-                self.session.add(existing)
+                await self._ensure_ict_personnel_record(staff_id)
 
         # ── Role transition: ICT_PERSONNEL → STAFF/ADMIN ──────
         elif old_role == UserRole.ict_personnel and new_role != UserRole.ict_personnel:
