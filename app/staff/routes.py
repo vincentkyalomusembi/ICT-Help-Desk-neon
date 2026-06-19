@@ -90,6 +90,9 @@ async def get_me(current: Staff = Depends(get_current_staff)):
     return current
 
 
+# NOTE: /me must be declared before /{staff_id} to prevent FastAPI
+# from matching the string "me" as a UUID and raising a validation error.
+
 @staff_router.get(
     "/{staff_id}",
     response_model=StaffResponse,
@@ -99,6 +102,23 @@ async def get_staff(
     staff_id: UUID,
     session: AsyncSession = Depends(get_db),
     _: Staff = Depends(require_admin),
+):
+    return await StaffService(session).get_staff_by_id(staff_id)
+
+
+# NEW: Lightweight name-resolution endpoint accessible by any authenticated
+# staff member. Used by the ICT ticket detail page to resolve staff_id → full
+# name without requiring admin privileges. Keeps the full GET /{staff_id}
+# endpoint admin-only while allowing technicians to identify who raised a ticket.
+@staff_router.get(
+    "/{staff_id}/basic",
+    response_model=StaffResponse,
+    summary="Get basic staff info for name resolution (any authenticated staff)",
+)
+async def get_staff_basic(
+    staff_id: UUID,
+    session: AsyncSession = Depends(get_db),
+    _: Staff = Depends(get_current_staff),
 ):
     return await StaffService(session).get_staff_by_id(staff_id)
 
