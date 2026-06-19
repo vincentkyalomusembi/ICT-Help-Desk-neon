@@ -118,6 +118,7 @@ class StaffResponse(BaseModel):
     office_number: str
     role: UserRole
     created_at: datetime
+    is_active: bool = False
 
     class Config:
         from_attributes = True
