@@ -17,7 +17,7 @@ from app.staff.schemas import (
 from app.core.security import hash_password, verify_password
 from app.auth.magic import create_magic_token
 from app.core.email import send_magic_link
-
+from app.auth.model import Session as AuthSession  
 logger = logging.getLogger(__name__)
 
 
@@ -35,7 +35,24 @@ class StaffService:
                 detail=f"Staff with id '{staff_id}' not found.",
             )
         return staff
-
+    
+    async def _attach_active_status(self, items: list[Staff]) -> list[Staff]:
+        if not items:
+            return items
+        now = datetime.now(timezone.utc)
+        ids = [s.id for s in items]
+        result = await self.session.execute(
+            select(AuthSession.staff_id).where(
+                AuthSession.staff_id.in_(ids),
+                AuthSession.is_active == True,
+                AuthSession.expires_at > now,
+            ).distinct()
+        )
+        active_ids = {row[0] for row in result.all()}
+        for s in items:
+            s.is_active = s.id in active_ids
+        return items
+    
     async def _assert_unique_field(
         self,
         field_name: str,
@@ -157,6 +174,7 @@ class StaffService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Staff with id '{staff_id}' not found.",
             )
+        await self._attach_active_status([staff])
         return staff
 
     async def get_staff_by_email(self, email: str) -> Optional[Staff]:
@@ -193,7 +211,7 @@ class StaffService:
 
         stmt = stmt.offset(skip).limit(limit)
         result = await self.session.execute(stmt)
-        return list(result.scalars().all())
+        return await self._attach_active_status(list(result.scalars().all()))
 
     async def _ensure_ict_personnel_record(self, staff_id: UUID) -> None:
         """
@@ -288,6 +306,7 @@ class StaffService:
         self.session.add(staff)
         await self.session.commit()
         await self.session.refresh(staff)
+        await self._attach_active_status([staff])
         return staff
 
     async def delete_staff(self, staff_id: UUID) -> None:
