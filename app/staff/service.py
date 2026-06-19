@@ -119,6 +119,12 @@ class StaffService:
             created_at=now,
         )
         self.session.add(staff)
+        await self.session.flush()  # get staff.id before commit
+
+        # If registered directly as ICT personnel, create profile immediately
+        if payload.role == UserRole.ict_personnel:
+            await self._ensure_ict_personnel_record(staff.id)
+
         await self.session.commit()
         await self.session.refresh(staff)
 
@@ -189,14 +195,11 @@ class StaffService:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def _ensure_ict_personnel_record(
-        self, staff_id: UUID
-    ) -> None:
+    async def _ensure_ict_personnel_record(self, staff_id: UUID) -> None:
         """
         Creates an IctPersonnel record for the given staff_id if one does not
-        already exist. Called both on fresh role transitions and as a safety net
-        when the role is already ict_personnel but the record is missing (e.g.
-        from a previously failed insert).
+        already exist. Called on fresh role transitions and as a safety net
+        when the role is already ict_personnel but the record is missing.
         """
         from app.ict_personnel.model import IctPersonnel, Availability
 
@@ -206,9 +209,7 @@ class StaffService:
         existing = result.scalar_one_or_none()
 
         if existing is None:
-            logger.info(
-                f"Creating IctPersonnel record for staff {staff_id}"
-            )
+            logger.info(f"Creating IctPersonnel record for staff {staff_id}")
             ict = IctPersonnel(
                 staff_id=staff_id,
                 specialization=None,
@@ -217,10 +218,7 @@ class StaffService:
             )
             self.session.add(ict)
         else:
-            # Record exists — reset for re-onboarding
-            logger.info(
-                f"Resetting existing IctPersonnel record for staff {staff_id}"
-            )
+            logger.info(f"Resetting existing IctPersonnel record for staff {staff_id}")
             existing.specialization = None
             existing.is_active = False
             self.session.add(existing)
@@ -243,8 +241,6 @@ class StaffService:
             await self._ensure_ict_personnel_record(staff_id)
 
         # ── Safety net: already ICT_PERSONNEL but record missing ──
-        # Handles the case where role was saved in a previous request but the
-        # IctPersonnel insert failed — re-sending the same role triggers this.
         elif new_role == UserRole.ict_personnel and old_role == UserRole.ict_personnel:
             from app.ict_personnel.model import IctPersonnel
 
