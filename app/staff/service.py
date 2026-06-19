@@ -50,7 +50,7 @@ class StaffService:
         )
         active_ids = {row[0] for row in result.all()}
         for s in items:
-            s.is_active = s.id in active_ids
+            object.__setattr__(s, "is_active", s.id in active_ids)
         return items
     
     async def _assert_unique_field(
