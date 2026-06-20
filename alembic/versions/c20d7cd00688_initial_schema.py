@@ -1,8 +1,8 @@
-"""initial tables with uuid
+"""initial_schema
 
-Revision ID: 7fbaba2fc58b
+Revision ID: c20d7cd00688
 Revises: 
-Create Date: 2026-06-01 13:02:15.474884
+Create Date: 2026-06-10 10:33:13.819598
 
 """
 from typing import Sequence, Union
@@ -10,10 +10,10 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-import sqlmodel
+import sqlmodel.sql.sqltypes
 
 # revision identifiers, used by Alembic.
-revision: str = '7fbaba2fc58b'
+revision: str = 'c20d7cd00688'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -62,13 +62,14 @@ def upgrade() -> None:
     sa.Column('phone_number', sqlmodel.sql.sqltypes.AutoString(length=15), nullable=True),
     sa.Column('directorate_id', sa.Integer(), nullable=False),
     sa.Column('department_id', sa.Integer(), nullable=False),
-    sa.Column('job_title', sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False),
     sa.Column('office_location', sqlmodel.sql.sqltypes.AutoString(length=100), nullable=True),
+    sa.Column('office_number', sqlmodel.sql.sqltypes.AutoString(length=20), nullable=False),
     sa.Column('role', sa.Enum('admin', 'staff', 'ict_personnel', name='userrole'), nullable=False),
     sa.Column('password_hash', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('failed_attempts', sa.Integer(), nullable=False),
     sa.Column('locked_until', postgresql.TIMESTAMP(timezone=True), nullable=True),
     sa.Column('password_changed_at', postgresql.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column('is_activated', sa.Boolean(), nullable=False),
     sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['department_id'], ['departments.id'], ),
     sa.ForeignKeyConstraint(['directorate_id'], ['directorates.id'], ),
@@ -87,19 +88,6 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['staff_id'], ['staff.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_table('audit_logs',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('staff_id', sa.Uuid(), nullable=True),
-    sa.Column('action', sa.Enum('TICKET_CREATED', 'TICKET_UPDATED', 'TICKET_ASSIGNED', 'TICKET_CLOSED', 'ASSET_ALLOCATED', 'ASSET_DEALLOCATED', 'USER_CREATED', 'USER_UPDATED', 'LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGOUT', 'PERMISSION_CHANGED', 'PASSWORD_RESET', name='auditaction'), nullable=False),
-    sa.Column('table_name', sqlmodel.sql.sqltypes.AutoString(length=50), nullable=False),
-    sa.Column('record_id', sa.Integer(), nullable=True),
-    sa.Column('ip_address', sqlmodel.sql.sqltypes.AutoString(length=45), nullable=True),
-    sa.Column('mac_address', sqlmodel.sql.sqltypes.AutoString(length=17), nullable=True),
-    sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), nullable=False),
-    sa.ForeignKeyConstraint(['staff_id'], ['staff.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_audit_logs_table_name'), 'audit_logs', ['table_name'], unique=False)
     op.create_table('ict_personnel',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('staff_id', sa.Uuid(), nullable=False),
@@ -111,6 +99,16 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('staff_id')
     )
+    op.create_table('magic_link_tokens',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('staff_id', sa.Uuid(), nullable=False),
+    sa.Column('token', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('expires_at', postgresql.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column('used', sa.Boolean(), nullable=False),
+    sa.ForeignKeyConstraint(['staff_id'], ['staff.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_magic_link_tokens_token'), 'magic_link_tokens', ['token'], unique=True)
     op.create_table('sessions',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('staff_id', sa.Uuid(), nullable=False),
@@ -123,16 +121,32 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('token')
     )
+    op.create_table('audit_logs',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('staff_id', sa.Uuid(), nullable=True),
+    sa.Column('session_id', sa.Integer(), nullable=True),
+    sa.Column('action', sa.Enum('TICKET_CREATED', 'TICKET_UPDATED', 'TICKET_ASSIGNED', 'TICKET_CLOSED', 'ASSET_ALLOCATED', 'ASSET_DEALLOCATED', 'USER_CREATED', 'USER_UPDATED', 'LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGOUT', 'PERMISSION_CHANGED', 'PASSWORD_RESET', name='auditaction'), nullable=False),
+    sa.Column('table_name', sqlmodel.sql.sqltypes.AutoString(length=50), nullable=False),
+    sa.Column('record_id', sqlmodel.sql.sqltypes.AutoString(length=50), nullable=True),
+    sa.Column('ip_address', sqlmodel.sql.sqltypes.AutoString(length=45), nullable=True),
+    sa.Column('mac_address', sqlmodel.sql.sqltypes.AutoString(length=17), nullable=True),
+    sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['session_id'], ['sessions.id'], ),
+    sa.ForeignKeyConstraint(['staff_id'], ['staff.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_audit_logs_table_name'), 'audit_logs', ['table_name'], unique=False)
     op.create_table('tickets',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('staff_id', sa.Uuid(), nullable=False),
     sa.Column('assigned_to_id', sa.Integer(), nullable=True),
-    sa.Column('title', sqlmodel.sql.sqltypes.AutoString(length=150), nullable=False),
+    sa.Column('title', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('description', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('category', sa.Enum('hardware', 'software', 'network', 'access_permissions', 'security_incidents', 'other', name='ticketcategory'), nullable=False),
-    sa.Column('status', sa.Enum('open', 'in_progress', 'resolved', 'closed', name='ticketstatus'), nullable=False),
-    sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), nullable=False),
-    sa.Column('resolved_at', postgresql.TIMESTAMP(timezone=True), nullable=True),
+    sa.Column('status', sa.Enum('open', 'in_progress', 'resolved', 'unresolved', 'closed', name='ticketstatus'), nullable=False),
+    sa.Column('comment', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+    sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('closed_at', postgresql.TIMESTAMP(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['assigned_to_id'], ['ict_personnel.id'], ),
     sa.ForeignKeyConstraint(['staff_id'], ['staff.id'], ),
     sa.PrimaryKeyConstraint('id')
@@ -144,10 +158,12 @@ def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_table('tickets')
-    op.drop_table('sessions')
-    op.drop_table('ict_personnel')
     op.drop_index(op.f('ix_audit_logs_table_name'), table_name='audit_logs')
     op.drop_table('audit_logs')
+    op.drop_table('sessions')
+    op.drop_index(op.f('ix_magic_link_tokens_token'), table_name='magic_link_tokens')
+    op.drop_table('magic_link_tokens')
+    op.drop_table('ict_personnel')
     op.drop_table('asset_allocations')
     op.drop_index(op.f('ix_staff_personal_number'), table_name='staff')
     op.drop_index(op.f('ix_staff_email'), table_name='staff')
