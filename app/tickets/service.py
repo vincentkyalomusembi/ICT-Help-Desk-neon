@@ -352,6 +352,15 @@ async def delete_ticket(db: AsyncSession, ticket_id: int) -> bool:
     ticket = result.scalar_one_or_none()
     if not ticket:
         return False
+
+    if ticket.assigned_to_id:
+        personnel_result = await db.execute(
+            select(IctPersonnel).where(IctPersonnel.id == ticket.assigned_to_id)
+        )
+        personnel = personnel_result.scalar_one_or_none()
+        if personnel and personnel.availability == Availability.busy:
+            personnel.availability = Availability.available
+
     await db.delete(ticket)
     await db.commit()
     return True
