@@ -36,7 +36,7 @@ class Department(SQLModel, table=True):
     __tablename__ = "departments"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    directorate_id: int = Field(foreign_key="directorates.id")
+    directorate_id: int = Field(foreign_key="directorates.id", index=True)
     name: str = Field(max_length=100, unique=True, index=True)
     description: Optional[str] = Field(default=None)
 
@@ -54,8 +54,8 @@ class Staff(SQLModel, table=True):
     full_name: str = Field(max_length=100)
     email: str = Field(max_length=100, unique=True, index=True)
     phone_number: Optional[str] = Field(default=None, max_length=15)
-    directorate_id: int = Field(foreign_key="directorates.id")
-    department_id: int = Field(foreign_key="departments.id")
+    directorate_id: int = Field(foreign_key="directorates.id", index=True)
+    department_id: int = Field(foreign_key="departments.id", index=True)
     office_location: Optional[str] = Field(default=None, max_length=100)
     office_number: str = Field(max_length=20)
     role: UserRole = Field(default=UserRole.staff, sa_column_kwargs={"nullable": False})
