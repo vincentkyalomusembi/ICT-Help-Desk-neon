@@ -72,3 +72,9 @@ class IctPersonnelResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class IctPersonnelSelfUpdate(BaseModel):
+    """Technician self-service update — no is_active, no availability."""
+    specialization: Optional[Specialization] = None
+    phone_extension: Optional[str] = None
