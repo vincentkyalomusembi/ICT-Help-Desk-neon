@@ -1,4 +1,4 @@
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, model_validator, computed_field
 from typing import Optional
 from datetime import datetime, timezone
 from uuid import UUID
@@ -43,6 +43,7 @@ class TicketResponse(BaseModel):
 
 
 class TicketAdminResponse(TicketResponse):
+    @computed_field
     @property
     def age_hours(self) -> float:
         return (
