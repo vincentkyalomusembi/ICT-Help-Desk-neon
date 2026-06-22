@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.ict_personnel.model import IctPersonnel, Availability
 from app.ict_personnel.schemas import (
-    IctPersonnelCreate, IctPersonnelUpdate, IctPersonnelSetup
+    IctPersonnelCreate, IctPersonnelUpdate, IctPersonnelSetup, IctPersonnelSelfUpdate
 )
 from app.staff.model import Staff
 
@@ -140,11 +140,11 @@ class IctPersonnelService:
         return await self._load(session, personnel.id)
 
     async def update_by_staff_id(
-        self,
-        session: AsyncSession,
-        staff_id: UUID,
-        payload: IctPersonnelUpdate,
-    ) -> Optional[IctPersonnel]:
+    self,
+    session: AsyncSession,
+    staff_id: UUID,
+    payload: IctPersonnelSelfUpdate,
+) -> Optional[IctPersonnel]:
         """
         Allows a technician to update their own profile using their staff_id.
         Delegates to update() once the personnel record is located.

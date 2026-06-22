@@ -9,6 +9,7 @@ from app.ict_personnel.schemas import (
     IctPersonnelCreate,
     IctPersonnelResponse,
     IctPersonnelUpdate,
+    IctPersonnelSelfUpdate,
     IctPersonnelDutyUpdate,
     IctPersonnelSetup,
 )
@@ -58,7 +59,7 @@ async def setup_my_profile(
 
 @router.patch("/me", response_model=IctPersonnelResponse)
 async def update_my_profile(
-    payload: IctPersonnelUpdate,
+    payload: IctPersonnelSelfUpdate,
     current_staff: IctStaff,
     session: AsyncSession = Depends(get_db),
 ):
