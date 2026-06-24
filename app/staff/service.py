@@ -17,7 +17,8 @@ from app.staff.schemas import (
 from app.core.security import hash_password, verify_password
 from app.auth.magic import create_magic_token
 from app.core.email import send_magic_link
-from app.auth.model import Session as AuthSession  
+from app.auth.model import Session as AuthSession
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,7 +26,7 @@ class StaffService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    # ── Helpers ───────────────────────────────────────────────
+    # ── Helpers ───────────────────────────────────────────────────────────────
 
     async def _get_or_404(self, staff_id: UUID) -> Staff:
         staff = await self.session.get(Staff, staff_id)
@@ -35,8 +36,9 @@ class StaffService:
                 detail=f"Staff with id '{staff_id}' not found.",
             )
         return staff
-    
+
     async def _attach_active_status(self, items: list[Staff]) -> list[Staff]:
+        """Annotates each Staff object with is_active based on live session data."""
         if not items:
             return items
         now = datetime.now(timezone.utc)
@@ -52,7 +54,7 @@ class StaffService:
         for s in items:
             object.__setattr__(s, "is_active", s.id in active_ids)
         return items
-    
+
     async def _assert_unique_field(
         self,
         field_name: str,
@@ -114,7 +116,7 @@ class StaffService:
                 detail=f"Department with name '{name}' already exists.",
             )
 
-    # ── Staff CRUD ────────────────────────────────────────────
+    # ── Staff CRUD ────────────────────────────────────────────────────────────
 
     async def create_staff(self, payload: StaffCreate) -> StaffCreateResponse:
         await self._assert_unique_field("personal_number", payload.personal_number)
@@ -134,6 +136,10 @@ class StaffService:
             password_hash=hash_password(payload.password),
             password_changed_at=now,
             created_at=now,
+            # NEW: Record exactly when the policy was acknowledged at registration.
+            # Required for audit compliance per ICTA.3.002:2019 section 12.1.
+            # Null if admin did not pass policy_acknowledged=True at creation.
+            policy_acknowledged_at=now if payload.policy_acknowledged else None,
         )
         self.session.add(staff)
         await self.session.flush()  # get staff.id before commit
@@ -236,6 +242,8 @@ class StaffService:
             )
             self.session.add(ict)
         else:
+            # Profile already exists — reset specialization so technician
+            # goes through setup flow again on next login
             logger.info(f"Resetting existing IctPersonnel record for staff {staff_id}")
             existing.specialization = None
             existing.is_active = False
@@ -247,18 +255,28 @@ class StaffService:
 
         update_data = payload.model_dump(exclude_unset=True)
 
+        # NEW: Handle policy_acknowledged separately — it maps to a timestamp
+        # field on the model, not a boolean. Remove it from the loop before
+        # iterating so setattr doesn't try to write a bool to a datetime column.
+        policy_acknowledged = update_data.pop("policy_acknowledged", None)
+
         for field, value in update_data.items():
             setattr(staff, field, value)
+
+        # NEW: If admin is recording a belated policy acknowledgement, stamp it now.
+        # Only updates if not already acknowledged — avoids overwriting the original timestamp.
+        if policy_acknowledged is True and staff.policy_acknowledged_at is None:
+            staff.policy_acknowledged_at = datetime.now(timezone.utc)
 
         new_role = staff.role
 
         logger.info(f"update_staff: {staff_id} role {old_role!r} → {new_role!r}")
 
-        # ── Fresh transition: any role → ICT_PERSONNEL ────────
+        # ── Fresh transition: any role → ICT_PERSONNEL ────────────────────────
         if new_role == UserRole.ict_personnel and old_role != UserRole.ict_personnel:
             await self._ensure_ict_personnel_record(staff_id)
 
-        # ── Safety net: already ICT_PERSONNEL but record missing ──
+        # ── Safety net: already ICT_PERSONNEL but record missing ──────────────
         elif new_role == UserRole.ict_personnel and old_role == UserRole.ict_personnel:
             from app.ict_personnel.model import IctPersonnel
 
@@ -272,7 +290,7 @@ class StaffService:
                 )
                 await self._ensure_ict_personnel_record(staff_id)
 
-        # ── Role transition: ICT_PERSONNEL → STAFF/ADMIN ──────
+        # ── Role transition: ICT_PERSONNEL → STAFF/ADMIN ──────────────────────
         elif old_role == UserRole.ict_personnel and new_role != UserRole.ict_personnel:
             from app.ict_personnel.model import IctPersonnel
             from app.tickets.model import Ticket, TicketStatus
@@ -365,7 +383,7 @@ class StaffService:
             return False
         return datetime.now(timezone.utc) < staff.locked_until
 
-    # ── Directorate CRUD ──────────────────────────────────────
+    # ── Directorate CRUD ──────────────────────────────────────────────────────
 
     async def create_directorate(self, payload: DirectorateCreate) -> Directorate:
         await self._assert_directorate_name_unique(payload.name)
@@ -406,7 +424,7 @@ class StaffService:
         await self.session.delete(obj)
         await self.session.commit()
 
-    # ── Department CRUD ───────────────────────────────────────
+    # ── Department CRUD ───────────────────────────────────────────────────────
 
     async def create_department(self, payload: DepartmentCreate) -> Department:
         await self._get_directorate_or_404(payload.directorate_id)
