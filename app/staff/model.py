@@ -29,7 +29,7 @@ class Directorate(SQLModel, table=True):
     description: Optional[str] = Field(default=None)
 
     departments: List["Department"] = Relationship(back_populates="directorate")
-    staff: List["Staff"] = Relationship(back_populates="directorate")
+    staff: List["Staff"] = Relationship(back_populates="staff")
 
 
 class Department(SQLModel, table=True):
@@ -71,9 +71,15 @@ class Staff(SQLModel, table=True):
     created_at: datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
     )
+    # Timestamp when staff acknowledged the Information Security Policy.
+    # Required by ICTA.3.002:2019 section 12.1 and the Help Desk ISP.
+    # Null means not yet acknowledged — used to enforce policy gate on login.
+    policy_acknowledged_at: Optional[datetime] = Field(
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=True, default=None)
+    )
 
     directorate: Optional["Directorate"] = Relationship(back_populates="staff")
-    department: Optional["Department"] = Relationship(back_populates="staff")
+    department: Optional["Department"] = Relationship(back_populates="department")
     ict_profile: Optional["IctPersonnel"] = Relationship(back_populates="staff")
     tickets: List["Ticket"] = Relationship(back_populates="staff")
     asset_allocations: List["AssetAllocation"] = Relationship(back_populates="staff")

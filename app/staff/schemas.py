@@ -7,7 +7,7 @@ from app.core.security import validate_password_strength
 from app.ict_personnel.model import Specialization
 
 
-# Directorate
+# ── Directorate ───────────────────────────────────────────────────────────────
 
 class DirectorateCreate(BaseModel):
     name: str
@@ -28,7 +28,7 @@ class DirectorateUpdate(BaseModel):
     description: Optional[str] = None
 
 
-# Department
+# ── Department ────────────────────────────────────────────────────────────────
 
 class DepartmentCreate(BaseModel):
     directorate_id: int
@@ -60,7 +60,7 @@ class DepartmentUpdate(BaseModel):
     directorate_id: Optional[int] = None
 
 
-# Staff
+# ── Staff ─────────────────────────────────────────────────────────────────────
 
 class StaffCreate(BaseModel):
     personal_number: str
@@ -74,6 +74,10 @@ class StaffCreate(BaseModel):
     role: UserRole = UserRole.staff
     password: str
     confirm_password: str
+    # NEW: Whether the staff member acknowledged the Information Security Policy
+    # at registration. Required by ICTA.3.002:2019 section 12.1.
+    # Defaults to False — admin must explicitly pass True to record acknowledgement.
+    policy_acknowledged: bool = False
 
     @field_validator("password")
     @classmethod
@@ -103,6 +107,9 @@ class StaffUpdate(BaseModel):
     role: Optional[UserRole] = None
     # specialization removed — ICT personnel set their own after first login
     # via POST /ict-personnel/me/setup
+    # NEW: Allow admin to update policy acknowledgement after the fact
+    # e.g. if staff acknowledged on paper and it needs to be recorded later.
+    policy_acknowledged: Optional[bool] = None
 
 
 class StaffResponse(BaseModel):
@@ -119,12 +126,15 @@ class StaffResponse(BaseModel):
     role: UserRole
     created_at: datetime
     is_active: bool = False
+    # NEW: Exposed so the frontend can check policy gate status.
+    # Null means not yet acknowledged.
+    policy_acknowledged_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
 
 
-# Password
+# ── Password ──────────────────────────────────────────────────────────────────
 
 class PasswordChangeRequest(BaseModel):
     current_password: str
