@@ -55,10 +55,14 @@ class AssetAllocation(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     asset_id: int = Field(foreign_key="assets.id")
-    staff_id: UUID = Field(foreign_key="staff.id")  
+    staff_id: UUID = Field(foreign_key="staff.id")
+    allocated_by_id: UUID = Field(foreign_key="staff.id")   # ← add this
     allocation_date: date
     return_date: Optional[date] = Field(default=None)
     notes: Optional[str] = Field(default=None)
 
     asset: Optional["Asset"] = Relationship(back_populates="allocations")
-    staff: Optional["Staff"] = Relationship(back_populates="asset_allocations")
+    staff: Optional["Staff"] = Relationship(
+        back_populates="asset_allocations",
+        sa_relationship_kwargs={"foreign_keys": "[AssetAllocation.staff_id]"},
+    )
