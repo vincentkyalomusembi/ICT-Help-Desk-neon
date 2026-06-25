@@ -29,7 +29,7 @@ class Directorate(SQLModel, table=True):
     description: Optional[str] = Field(default=None)
 
     departments: List["Department"] = Relationship(back_populates="directorate")
-    staff: List["Staff"] = Relationship(back_populates="staff")
+    staff: List["Staff"] = Relationship(back_populates="directorate")
 
 
 class Department(SQLModel, table=True):
@@ -79,9 +79,12 @@ class Staff(SQLModel, table=True):
     )
 
     directorate: Optional["Directorate"] = Relationship(back_populates="staff")
-    department: Optional["Department"] = Relationship(back_populates="department")
+    department: Optional["Department"] = Relationship(back_populates="staff")
     ict_profile: Optional["IctPersonnel"] = Relationship(back_populates="staff")
     tickets: List["Ticket"] = Relationship(back_populates="staff")
-    asset_allocations: List["AssetAllocation"] = Relationship(back_populates="staff")
+    asset_allocations: List["AssetAllocation"] = Relationship(
+        back_populates="staff",
+        sa_relationship_kwargs={"foreign_keys": "[AssetAllocation.staff_id]"},
+    )
     audit_logs: List["AuditLog"] = Relationship(back_populates="staff")
     sessions: List["Session"] = Relationship(back_populates="staff")

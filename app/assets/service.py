@@ -7,6 +7,7 @@ from app.assets.schemas import (
     AssetAllocationCreate, AssetAllocationUpdate
 )
 from datetime import datetime, timezone
+from uuid import UUID
 
 
 # ── Asset Services ────────────────────────────────────────────
@@ -51,7 +52,7 @@ async def delete_asset(db: AsyncSession, asset_id: int) -> bool:
 
 # ── Asset Allocation Services ─────────────────────────────────
 
-async def allocate_asset(db: AsyncSession, data: AssetAllocationCreate) -> AssetAllocation:
+async def allocate_asset(db: AsyncSession, data: AssetAllocationCreate, allocated_by_id: UUID) -> AssetAllocation:
     # Check if asset is already allocated
     result = await db.execute(
         select(AssetAllocation).where(
@@ -66,7 +67,7 @@ async def allocate_asset(db: AsyncSession, data: AssetAllocationCreate) -> Asset
             detail="Asset is already allocated. Return it first before reallocating."
         )
 
-    allocation = AssetAllocation(**data.model_dump())
+    allocation = AssetAllocation(**data.model_dump(), allocated_by_id=allocated_by_id)
     db.add(allocation)
     await db.commit()
     await db.refresh(allocation)
