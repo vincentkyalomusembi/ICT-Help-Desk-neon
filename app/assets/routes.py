@@ -14,8 +14,8 @@ router = APIRouter(prefix="/assets", tags=["Assets"])
 # ── Asset Allocation Routes (must come before /{asset_id}) ───
 
 @router.post("/allocate", response_model=AssetAllocationResponse, status_code=status.HTTP_201_CREATED)
-async def allocate_asset(data: AssetAllocationCreate, _: IctStaff, db: AsyncSession = Depends(get_db)):
-    return await service.allocate_asset(db, data)
+async def allocate_asset(data: AssetAllocationCreate, current: IctStaff, db: AsyncSession = Depends(get_db)):
+    return await service.allocate_asset(db, data, allocated_by_id=current.id)
 
 
 @router.get("/allocations", response_model=list[AssetAllocationResponse])

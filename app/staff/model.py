@@ -29,14 +29,14 @@ class Directorate(SQLModel, table=True):
     description: Optional[str] = Field(default=None)
 
     departments: List["Department"] = Relationship(back_populates="directorate")
-    staff: List["Staff"] = Relationship(back_populates="staff")
+    staff: List["Staff"] = Relationship(back_populates="directorate")
 
 
 class Department(SQLModel, table=True):
     __tablename__ = "departments"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    directorate_id: int = Field(foreign_key="directorates.id")
+    directorate_id: int = Field(foreign_key="directorates.id", index=True)
     name: str = Field(max_length=100, unique=True, index=True)
     description: Optional[str] = Field(default=None)
 
@@ -54,8 +54,8 @@ class Staff(SQLModel, table=True):
     full_name: str = Field(max_length=100)
     email: str = Field(max_length=100, unique=True, index=True)
     phone_number: Optional[str] = Field(default=None, max_length=15)
-    directorate_id: int = Field(foreign_key="directorates.id")
-    department_id: int = Field(foreign_key="departments.id")
+    directorate_id: int = Field(foreign_key="directorates.id", index=True)
+    department_id: int = Field(foreign_key="departments.id", index=True)
     office_location: Optional[str] = Field(default=None, max_length=100)
     office_number: str = Field(max_length=20)
     role: UserRole = Field(default=UserRole.staff, sa_column_kwargs={"nullable": False})
@@ -79,9 +79,12 @@ class Staff(SQLModel, table=True):
     )
 
     directorate: Optional["Directorate"] = Relationship(back_populates="staff")
-    department: Optional["Department"] = Relationship(back_populates="department")
+    department: Optional["Department"] = Relationship(back_populates="staff")
     ict_profile: Optional["IctPersonnel"] = Relationship(back_populates="staff")
     tickets: List["Ticket"] = Relationship(back_populates="staff")
-    asset_allocations: List["AssetAllocation"] = Relationship(back_populates="staff")
+    asset_allocations: List["AssetAllocation"] = Relationship(
+        back_populates="staff",
+        sa_relationship_kwargs={"foreign_keys": "[AssetAllocation.staff_id]"},
+    )
     audit_logs: List["AuditLog"] = Relationship(back_populates="staff")
     sessions: List["Session"] = Relationship(back_populates="staff")
