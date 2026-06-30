@@ -31,22 +31,23 @@ class Ticket(SQLModel, table=True):
     __tablename__ = "tickets"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    staff_id: UUID = Field(foreign_key="staff.id")
+    staff_id: UUID = Field(foreign_key="staff.id", index=True)
     assigned_to_id: Optional[int] = Field(
         default=None,
         foreign_key="ict_personnel.id",
-        nullable=True
+        nullable=True,
+        index=True,
     )  # None means queued — no matching specialist available at creation time
     title: str
     description: str
-    category: TicketCategory = Field(sa_column_kwargs={"nullable": False})
-    status: TicketStatus = Field(default=TicketStatus.open, sa_column_kwargs={"nullable": False})
-    comment: Optional[str] = Field(default=None, nullable=True)  # compulsory on UNRESOLVED
+    category: TicketCategory = Field(index=True, sa_column_kwargs={"nullable": False})
+    status: TicketStatus = Field(default=TicketStatus.open, index=True, sa_column_kwargs={"nullable": False})
+    comment: Optional[str] = Field(default=None, nullable=True)
     created_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), index=True)
     )
     closed_at: Optional[datetime] = Field(
-        sa_column=Column(TIMESTAMP(timezone=True), nullable=True)
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=True, index=True)
     )
 
     staff: Optional["Staff"] = Relationship(back_populates="tickets")

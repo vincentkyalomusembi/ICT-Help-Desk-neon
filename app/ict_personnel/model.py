@@ -31,15 +31,15 @@ class IctPersonnel(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     staff_id: UUID = Field(foreign_key="staff.id", unique=True)
     specialization: Optional[Specialization] = Field(
-        default=None, nullable=True
-    )  # null until ICT personnel completes setup after first login
+        default=None, nullable=True, index=True
+    )
     availability: Availability = Field(
         default=Availability.available,
-        sa_column_kwargs={"nullable": False}
+        sa_column_kwargs={"nullable": False},
+        index=True,
     )
     phone_extension: Optional[str] = Field(default=None, max_length=10)
-    is_active: bool = Field(default=False)
-    # False until ICT personnel sets specialization via POST /ict-personnel/me/setup
+    is_active: bool = Field(default=False, index=True)
 
     staff: Optional["Staff"] = Relationship(
         back_populates="ict_profile",
