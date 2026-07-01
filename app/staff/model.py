@@ -58,7 +58,7 @@ class Staff(SQLModel, table=True):
     department_id: int = Field(foreign_key="departments.id", index=True)
     office_location: Optional[str] = Field(default=None, max_length=100)
     office_number: str = Field(max_length=20)
-    role: UserRole = Field(default=UserRole.staff, sa_column_kwargs={"nullable": False})
+    role: UserRole = Field(default=UserRole.staff, index=True, sa_column_kwargs={"nullable": False})
     password_hash: str
     failed_attempts: int = Field(default=0)
     locked_until: Optional[datetime] = Field(

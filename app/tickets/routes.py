@@ -125,8 +125,15 @@ async def read_all(
     current_staff: CurrentStaff,
     skip: int = 0,
     limit: int = 50,
+    mine_only: bool = False,
     session: AsyncSession = Depends(get_db),
 ):
+    # mine_only=True always means "tickets I raised as staff",
+    # regardless of role — this is how ICT personnel see their own
+    # raised tickets separately from tickets assigned to them to work on.
+    if mine_only:
+        return await list_tickets(session, skip, limit, staff_id=current_staff.id)
+
     if current_staff.role == UserRole.admin:
         return await list_tickets(session, skip, limit)
     elif current_staff.role == UserRole.ict_personnel:

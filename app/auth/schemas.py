@@ -29,7 +29,6 @@ class StaffBasic(BaseModel):
 class SessionResponse(BaseModel):
     id: int
     staff_id: UUID
-    token: str
     ip_address: Optional[str]
     login_at: datetime
     expires_at: datetime

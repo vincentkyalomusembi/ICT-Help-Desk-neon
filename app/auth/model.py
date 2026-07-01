@@ -14,16 +14,16 @@ class Session(SQLModel, table=True):
     __tablename__ = "sessions"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    staff_id: UUID = Field(foreign_key="staff.id")
+    staff_id: UUID = Field(foreign_key="staff.id", index=True)
     token: str = Field(unique=True)
     ip_address: Optional[str] = Field(default=None, max_length=45)
     login_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False, index=True)
     )
     expires_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False, index=True)
     )
-    is_active: bool = Field(default=True)
+    is_active: bool = Field(default=True, index=True)
 
     staff: Optional["Staff"] = Relationship(back_populates="sessions")
     audit_logs: list["AuditLog"] = Relationship(back_populates="session")
@@ -33,7 +33,7 @@ class MagicLinkToken(SQLModel, table=True):
     __tablename__ = "magic_link_tokens"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    staff_id: UUID = Field(foreign_key="staff.id")
+    staff_id: UUID = Field(foreign_key="staff.id", index=True)
     token: str = Field(unique=True, index=True)
     expires_at: datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
@@ -45,7 +45,7 @@ class PasswordResetToken(SQLModel, table=True):
     __tablename__ = "password_reset_tokens"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    staff_id: UUID = Field(foreign_key="staff.id")
+    staff_id: UUID = Field(foreign_key="staff.id", index=True)
     token: str = Field(max_length=100, unique=True, index=True)
     expires_at: datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
