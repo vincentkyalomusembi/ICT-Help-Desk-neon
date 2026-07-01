@@ -6,10 +6,15 @@ from app.core.database import get_db
 from app.core.dependencies import CurrentStaff, IctStaff, AdminStaff, CurrentSession
 from app.tickets.service import (
     create_ticket, get_ticket, list_tickets, list_queued_tickets,
-    list_unresolved_tickets, get_ticket_summary, get_tickets_by_personnel,
-    update_ticket, delete_ticket, get_stuck_tickets, reassign_ticket,
+    list_unresolved_tickets, list_team_unresolved, list_pending_confirmation,
+    get_ticket_summary, get_tickets_by_personnel,
+    update_ticket, confirm_ticket, pickup_ticket,
+    delete_ticket, get_stuck_tickets, reassign_ticket,
 )
-from app.tickets.schemas import TicketCreate, TicketUpdate, TicketResponse, TicketAdminResponse
+from app.tickets.schemas import (
+    TicketCreate, TicketUpdate, TicketConfirm,
+    TicketResponse, TicketAdminResponse,
+)
 from app.staff.model import UserRole
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
@@ -79,6 +84,40 @@ async def unresolved_tickets(
     return await list_unresolved_tickets(session, skip, limit)
 
 
+# ── ICT team view — must come before /{ticket_id} ─────────────
+
+@router.get("/team/unresolved", response_model=List[TicketResponse])
+async def team_unresolved(
+    _: IctStaff,
+    skip: int = 0,
+    limit: int = 50,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Tickets marked unresolved by a technician — visible to all ICT personnel.
+    Any available team member can pick these up.
+    """
+    return await list_team_unresolved(session, skip, limit)
+
+
+# ── Staff — tickets pending their confirmation — before /{ticket_id} ──
+
+@router.get("/my/pending-confirmation", response_model=List[TicketResponse])
+async def my_pending_confirmation(
+    current_staff: CurrentStaff,
+    skip: int = 0,
+    limit: int = 50,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Tickets the current staff member raised that are awaiting their
+    confirmation after ICT marked them resolved.
+    """
+    return await list_pending_confirmation(
+        session, current_staff.id, skip, limit
+    )
+
+
 # ── General routes ─────────────────────────────────────────────
 
 @router.get("/", response_model=List[TicketResponse])
@@ -144,6 +183,62 @@ async def update(
         )
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ticket not found."
+        )
+    return updated
+
+
+@router.post("/{ticket_id}/confirm", response_model=TicketResponse)
+async def confirm(
+    ticket_id: int,
+    payload: TicketConfirm,
+    current_staff: CurrentStaff,
+    current_session: CurrentSession,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Staff confirms or rejects a resolved ticket.
+    Technician is already released regardless of outcome.
+    """
+    try:
+        updated = await confirm_ticket(
+            session, ticket_id, payload,
+            current_staff.id, current_session,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ticket not found."
+        )
+    return updated
+
+
+@router.post("/{ticket_id}/pickup", response_model=TicketResponse)
+async def pickup(
+    ticket_id: int,
+    current_staff: IctStaff,
+    current_session: CurrentSession,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Any available ICT team member picks up an unresolved ticket
+    from the team view. No specialization restriction.
+    """
+    try:
+        updated = await pickup_ticket(
+            session, ticket_id,
+            current_staff.ict_profile.id,
+            current_session,
+        )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     if not updated:

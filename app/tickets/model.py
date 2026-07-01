@@ -12,19 +12,22 @@ if TYPE_CHECKING:
 
 
 class TicketCategory(str, enum.Enum):
-    hardware = "hardware"
-    software = "software"
-    network = "network"
+    hardware           = "hardware"
+    software           = "software"
+    network            = "network"
     access_permissions = "access_permissions"
     security_incidents = "security_incidents"
-    other = "other"
+    other              = "other"
+
 
 class TicketStatus(str, enum.Enum):
-    open = "open"
-    in_progress = "in_progress"
-    resolved = "resolved"
-    unresolved = "unresolved"
-    closed = "closed"
+    open                 = "open"
+    in_progress          = "in_progress"
+    resolved             = "resolved"           # transient — immediately becomes pending_confirmation
+    unresolved           = "unresolved"         # ICT couldn't fix — goes to team view
+    pending_confirmation = "pending_confirmation"  # ICT resolved, awaiting staff confirm
+    reopened             = "reopened"           # staff rejected — back in triage queue
+    closed               = "closed"             # staff confirmed fixed
 
 
 class Ticket(SQLModel, table=True):
@@ -51,4 +54,6 @@ class Ticket(SQLModel, table=True):
     )
 
     staff: Optional["Staff"] = Relationship(back_populates="tickets")
-    assigned_to: Optional["IctPersonnel"] = Relationship(back_populates="assigned_tickets")
+    assigned_to: Optional["IctPersonnel"] = Relationship(
+        back_populates="assigned_tickets"
+    )
