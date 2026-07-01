@@ -1,8 +1,8 @@
-"""initial_schema
+"""add_resolution_notes_rejection_reason_new_statuses
 
-Revision ID: 32f4c79a8c73
+Revision ID: 5175b4f375a7
 Revises: 
-Create Date: 2026-06-18 16:01:43.351992
+Create Date: 2026-07-01 16:19:49.669951
 
 """
 from typing import Sequence, Union
@@ -10,10 +10,11 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-import sqlmodel.sql.sqltypes
+import sqlmodel
+
 
 # revision identifiers, used by Alembic.
-revision: str = '32f4c79a8c73'
+revision: str = '5175b4f375a7'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -53,6 +54,7 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['directorate_id'], ['directorates.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_departments_directorate_id'), 'departments', ['directorate_id'], unique=False)
     op.create_index(op.f('ix_departments_name'), 'departments', ['name'], unique=True)
     op.create_table('staff',
     sa.Column('id', sa.UUID(), nullable=False),
@@ -71,19 +73,24 @@ def upgrade() -> None:
     sa.Column('password_changed_at', postgresql.TIMESTAMP(timezone=True), nullable=False),
     sa.Column('is_activated', sa.Boolean(), nullable=False),
     sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column('policy_acknowledged_at', postgresql.TIMESTAMP(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['department_id'], ['departments.id'], ),
     sa.ForeignKeyConstraint(['directorate_id'], ['directorates.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_staff_department_id'), 'staff', ['department_id'], unique=False)
+    op.create_index(op.f('ix_staff_directorate_id'), 'staff', ['directorate_id'], unique=False)
     op.create_index(op.f('ix_staff_email'), 'staff', ['email'], unique=True)
     op.create_index(op.f('ix_staff_personal_number'), 'staff', ['personal_number'], unique=True)
     op.create_table('asset_allocations',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('asset_id', sa.Integer(), nullable=False),
     sa.Column('staff_id', sa.Uuid(), nullable=False),
+    sa.Column('allocated_by_id', sa.Uuid(), nullable=False),
     sa.Column('allocation_date', sa.Date(), nullable=False),
     sa.Column('return_date', sa.Date(), nullable=True),
     sa.Column('notes', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+    sa.ForeignKeyConstraint(['allocated_by_id'], ['staff.id'], ),
     sa.ForeignKeyConstraint(['asset_id'], ['assets.id'], ),
     sa.ForeignKeyConstraint(['staff_id'], ['staff.id'], ),
     sa.PrimaryKeyConstraint('id')
@@ -154,8 +161,10 @@ def upgrade() -> None:
     sa.Column('title', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('description', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('category', sa.Enum('hardware', 'software', 'network', 'access_permissions', 'security_incidents', 'other', name='ticketcategory'), nullable=False),
-    sa.Column('status', sa.Enum('open', 'in_progress', 'resolved', 'unresolved', 'closed', name='ticketstatus'), nullable=False),
+    sa.Column('status', sa.Enum('open', 'in_progress', 'resolved', 'unresolved', 'pending_confirmation', 'reopened', 'closed', name='ticketstatus'), nullable=False),
     sa.Column('comment', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+    sa.Column('resolution_notes', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+    sa.Column('rejection_reason', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
     sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('closed_at', postgresql.TIMESTAMP(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['assigned_to_id'], ['ict_personnel.id'], ),
@@ -180,8 +189,11 @@ def downgrade() -> None:
     op.drop_table('asset_allocations')
     op.drop_index(op.f('ix_staff_personal_number'), table_name='staff')
     op.drop_index(op.f('ix_staff_email'), table_name='staff')
+    op.drop_index(op.f('ix_staff_directorate_id'), table_name='staff')
+    op.drop_index(op.f('ix_staff_department_id'), table_name='staff')
     op.drop_table('staff')
     op.drop_index(op.f('ix_departments_name'), table_name='departments')
+    op.drop_index(op.f('ix_departments_directorate_id'), table_name='departments')
     op.drop_table('departments')
     op.drop_index(op.f('ix_directorates_name'), table_name='directorates')
     op.drop_table('directorates')
