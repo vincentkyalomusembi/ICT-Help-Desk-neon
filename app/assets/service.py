@@ -17,8 +17,8 @@ async def create_asset(db: AsyncSession, data: AssetCreate) -> Asset:
     asset = Asset(**data.model_dump(), created_at=datetime.now(timezone.utc))
     db.add(asset)
     await db.commit()
-    await db.refresh(asset)
     return asset
+
 
 
 async def get_all_assets(db: AsyncSession) -> list[Asset]:
@@ -53,19 +53,19 @@ async def delete_asset(db: AsyncSession, asset_id: int) -> bool:
 
 # ── Asset Allocation Services ─────────────────────────────────
 
-async def allocate_asset(db: AsyncSession, data: AssetAllocationCreate, allocated_by_id: UUID) -> AssetAllocation:
+async def allocate_asset(db, data, allocated_by_id):
+    existing = await db.execute(
+        select(AssetAllocation)
+        .where(AssetAllocation.asset_id == data.asset_id, AssetAllocation.return_date == None)
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Asset is already allocated.")
+    
     allocation = AssetAllocation(**data.model_dump(), allocated_by_id=allocated_by_id)
     db.add(allocation)
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail="Asset is already allocated. Return it first before reallocating."
-        )
-    await db.refresh(allocation)
+    await db.commit()
     return allocation
+
 
 
 async def get_all_allocations(db: AsyncSession) -> list[AssetAllocation]:
