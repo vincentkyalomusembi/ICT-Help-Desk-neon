@@ -29,8 +29,11 @@ if raw:
         echo=getattr(settings, "DEBUG", False),
         connect_args={"ssl": "require"},
         pool_pre_ping=True,
-        pool_recycle=300,
+        pool_size=2,          # keep 2 connections warm
+        max_overflow=3,
+        pool_recycle=180,     # recycle before Neon's 5-min suspend kicks in
     )
+
     AsyncSessionLocal = sessionmaker(
         bind=engine,
         class_=AsyncSession,
