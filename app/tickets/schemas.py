@@ -18,11 +18,12 @@ class TicketUpdate(BaseModel):
     comment: Optional[str] = None
     resolution_notes: Optional[str] = None  # what the technician did
 
-    # FIX: removed the comment requirement for unresolved — resolution_notes
-    # covers this. The old comment validator was causing 422s from the frontend
-    # since the frontend only sends resolution_notes, not comment.
     @model_validator(mode="after")
     def validate_update(self) -> "TicketUpdate":
+        if self.status == TicketStatus.unresolved and not self.comment:
+            raise ValueError(
+                "A comment is required when marking a ticket as unresolved."
+            )
         if self.status in (
             TicketStatus.resolved,
             TicketStatus.unresolved,
