@@ -27,11 +27,14 @@ if raw:
     engine = create_async_engine(
         DATABASE_URL,
         echo=getattr(settings, "DEBUG", False),
-        connect_args={"ssl": "require"},
+        connect_args={
+            "ssl": "require",
+            "statement_cache_size": 0,   # this one is real and sufficient
+        },
         pool_pre_ping=True,
-        pool_size=2,          # keep 2 connections warm
+        pool_size=2,
         max_overflow=3,
-        pool_recycle=180,     # recycle before Neon's 5-min suspend kicks in
+        pool_recycle=180,
     )
 
     AsyncSessionLocal = sessionmaker(
