@@ -34,23 +34,34 @@ class Ticket(SQLModel, table=True):
     __tablename__ = "tickets"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    staff_id: UUID = Field(foreign_key="staff.id", index=True)
+    staff_id: UUID = Field(foreign_key="staff.id")
     assigned_to_id: Optional[int] = Field(
         default=None,
         foreign_key="ict_personnel.id",
         nullable=True,
-        index=True,
     )  # None means queued — no matching specialist available at creation time
     title: str
     description: str
-    category: TicketCategory = Field(index=True, sa_column_kwargs={"nullable": False})
-    status: TicketStatus = Field(default=TicketStatus.open, index=True, sa_column_kwargs={"nullable": False})
+    category: TicketCategory = Field(sa_column_kwargs={"nullable": False})
+    status: TicketStatus = Field(
+        default=TicketStatus.open,
+        sa_column_kwargs={"nullable": False},
+    )
     comment: Optional[str] = Field(default=None, nullable=True)
+
+    # What the technician did — mandatory when marking resolved or unresolved
+    resolution_notes: Optional[str] = Field(default=None, nullable=True)
+
+    # Why staff rejected the resolution — required when staff rejects
+    rejection_reason: Optional[str] = Field(default=None, nullable=True)
+
     created_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), index=True)
+        sa_column=Column(
+            TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+        )
     )
     closed_at: Optional[datetime] = Field(
-        sa_column=Column(TIMESTAMP(timezone=True), nullable=True, index=True)
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=True)
     )
 
     staff: Optional["Staff"] = Relationship(back_populates="tickets")

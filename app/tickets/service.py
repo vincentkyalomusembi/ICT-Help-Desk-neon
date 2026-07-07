@@ -14,7 +14,7 @@ from app.audit.model import AuditAction
 from app.auth.model import Session as UserSession
 
 
-# ── Triage Mapping ─────────────────────────────────────────────
+# ── Triage Mapping ─────────────────────────────────────────────────────────────
 
 CATEGORY_TO_SPECIALIZATION = {
     TicketCategory.hardware:           Specialization.hardware,
@@ -26,7 +26,7 @@ CATEGORY_TO_SPECIALIZATION = {
 }
 
 
-# ── Auto Assignment ────────────────────────────────────────────
+# ── Auto Assignment ────────────────────────────────────────────────────────────
 
 async def _auto_assign(
     db: AsyncSession,
@@ -69,7 +69,7 @@ async def _auto_assign(
     return best
 
 
-# ── Dequeue ────────────────────────────────────────────────────
+# ── Dequeue ────────────────────────────────────────────────────────────────────
 
 async def _dequeue_tickets(
     db: AsyncSession,
@@ -110,7 +110,7 @@ async def _dequeue_tickets(
         await db.commit()
 
 
-# ── Ticket Services ────────────────────────────────────────────
+# ── Ticket Services ────────────────────────────────────────────────────────────
 
 async def create_ticket(
     db: AsyncSession,
@@ -151,9 +151,6 @@ async def create_ticket(
             table_name="tickets",
             record_id=str(ticket.id),
         ), user_session)
-
-    if not personnel and data.category == TicketCategory.security_incidents:
-        pass
 
     return ticket
 
@@ -234,14 +231,14 @@ async def list_unresolved_tickets(
     skip: int = 0,
     limit: int = 50,
 ) -> list[Ticket]:
-    """Admin view — tickets closed with a comment (unresolved by ICT)."""
+    """
+    Admin view — tickets ICT couldn't resolve, now sitting in team view.
+    FIX: updated from old closed+comment filter to match new lifecycle status.
+    """
     result = await db.execute(
         select(Ticket)
-        .where(
-            Ticket.status == TicketStatus.closed,
-            Ticket.comment != None,  # noqa: E711
-        )
-        .order_by(Ticket.closed_at.asc())
+        .where(Ticket.status == TicketStatus.unresolved)
+        .order_by(Ticket.created_at.asc())
         .offset(skip)
         .limit(limit)
     )
@@ -330,11 +327,11 @@ async def update_ticket(
     if not ticket:
         return None
 
-    # Only assigned technician can update
+    # Only the assigned technician can update
     if ticket.assigned_to_id != acting_personnel_id:
         raise PermissionError("You can only update tickets assigned to you.")
 
-    # FIFO enforcement
+    # FIFO enforcement — must close oldest ticket first
     if data.status in (TicketStatus.resolved, TicketStatus.unresolved):
         oldest_result = await db.execute(
             select(func.min(Ticket.id)).where(
@@ -349,7 +346,7 @@ async def update_ticket(
                 f"addressed before #{ticket_id}."
             )
 
-    # Apply field updates
+    # Apply all field updates from payload
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(ticket, field, value)
 
@@ -360,7 +357,8 @@ async def update_ticket(
     personnel = personnel_result.scalar_one_or_none()
 
     if data.status == TicketStatus.resolved:
-        # ICT resolved — move to pending_confirmation, release technician immediately
+        # ICT resolved — move to pending_confirmation, release technician immediately.
+        # The setattr loop above already wrote resolution_notes to the ticket.
         ticket.status = TicketStatus.pending_confirmation
         db.add(ticket)
 
@@ -383,7 +381,8 @@ async def update_ticket(
             await _dequeue_tickets(db, personnel)
 
     elif data.status == TicketStatus.unresolved:
-        # ICT couldn't fix — push to team view, release technician immediately
+        # ICT couldn't fix — push to team view, release technician immediately.
+        # The setattr loop above already wrote resolution_notes to the ticket.
         ticket.status = TicketStatus.unresolved
         ticket.assigned_to_id = None  # unassigned so any team member can pick it up
         db.add(ticket)
@@ -407,7 +406,7 @@ async def update_ticket(
             await _dequeue_tickets(db, personnel)
 
     else:
-        # Regular update (description, comment etc)
+        # Regular update (description, comment, etc.)
         db.add(ticket)
         await db.commit()
         await db.refresh(ticket)
@@ -466,7 +465,7 @@ async def confirm_ticket(
         # Staff not happy — reopen and send back to triage queue
         ticket.status = TicketStatus.reopened
         ticket.rejection_reason = data.rejection_reason
-        ticket.assigned_to_id = None   # back to triage
+        ticket.assigned_to_id = None    # back to triage
         ticket.resolution_notes = None  # cleared for next technician
         ticket.closed_at = None
         db.add(ticket)
@@ -556,6 +555,7 @@ async def reassign_ticket(
     ticket.assigned_to_id = personnel.id
     ticket.status = TicketStatus.open
     ticket.comment = None
+    ticket.resolution_notes = None  # FIX: clear resolution notes on reassign
     ticket.closed_at = None
     db.add(ticket)
 
@@ -583,6 +583,9 @@ async def delete_ticket(db: AsyncSession, ticket_id: int) -> bool:
 
     assigned_to_id = ticket.assigned_to_id
 
+    # Delete the ticket first
+    await db.delete(ticket)
+
     personnel = None
     if assigned_to_id:
         personnel_result = await db.execute(
@@ -593,9 +596,10 @@ async def delete_ticket(db: AsyncSession, ticket_id: int) -> bool:
             personnel.availability = Availability.available
             db.add(personnel)
 
-    await db.delete(ticket)
+    # Commit deletion + availability change together so both persist
     await db.commit()
 
+    # Now dequeue — technician is confirmed available before this runs
     if personnel:
         await _dequeue_tickets(db, personnel)
 
