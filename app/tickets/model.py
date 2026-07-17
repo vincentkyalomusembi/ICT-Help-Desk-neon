@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, func
+from sqlalchemy import Column, func, Index
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from typing import Optional, TYPE_CHECKING
 from datetime import datetime
@@ -32,6 +32,14 @@ class TicketStatus(str, enum.Enum):
 
 class Ticket(SQLModel, table=True):
     __tablename__ = "tickets"
+    __table_args__ = (
+        Index("ix_ticket_status", "status"),
+        Index("ix_ticket_assigned_to_id", "assigned_to_id"),
+        Index("ix_ticket_staff_id", "staff_id"),
+        Index("ix_ticket_created_at", "created_at"),
+        Index("ix_ticket_assigned_status", "assigned_to_id", "status"),
+        Index("ix_ticket_staff_status", "staff_id", "status"),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     staff_id: UUID = Field(foreign_key="staff.id")

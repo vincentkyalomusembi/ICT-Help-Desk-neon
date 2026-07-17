@@ -54,16 +54,13 @@ async def delete_asset(db: AsyncSession, asset_id: int) -> bool:
 # ── Asset Allocation Services ─────────────────────────────────
 
 async def allocate_asset(db, data, allocated_by_id):
-    existing = await db.execute(
-        select(AssetAllocation)
-        .where(AssetAllocation.asset_id == data.asset_id, AssetAllocation.return_date == None)
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Asset is already allocated.")
-    
     allocation = AssetAllocation(**data.model_dump(), allocated_by_id=allocated_by_id)
     db.add(allocation)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Asset is already allocated.")
     return allocation
 
 
