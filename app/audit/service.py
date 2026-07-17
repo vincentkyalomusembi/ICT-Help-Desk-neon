@@ -27,8 +27,7 @@ class AuditService:
             mac_address=log_in.mac_address,
         )
         session.add(log)
-        await session.commit()
-        await session.refresh(log)
+        await session.flush()  # joins parent transaction, no extra commit
         return log
 
     async def create_system(
@@ -48,8 +47,7 @@ class AuditService:
             mac_address=log_in.mac_address,
         )
         session.add(log)
-        await session.commit()
-        await session.refresh(log)
+        await session.flush()  # joins parent transaction, no extra commit
         return log
 
     async def list(

@@ -34,39 +34,37 @@ async def _auto_assign(
 ) -> Optional[IctPersonnel]:
     specialization = CATEGORY_TO_SPECIALIZATION.get(category)
 
-    stmt = select(IctPersonnel).where(
-        IctPersonnel.is_active == True,
-        IctPersonnel.availability == Availability.available,
+    last_closed_subq = (
+        select(
+            Ticket.assigned_to_id.label("assigned_to_id"),
+            func.max(Ticket.closed_at).label("last_closed"),
+        )
+        .group_by(Ticket.assigned_to_id)
+        .subquery()
+    )
+
+    stmt = (
+        select(IctPersonnel)
+        .outerjoin(
+            last_closed_subq,
+            IctPersonnel.id == last_closed_subq.c.assigned_to_id,
+        )
+        .where(
+            IctPersonnel.is_active == True,
+            IctPersonnel.availability == Availability.available,
+        )
+        .order_by(
+            last_closed_subq.c.last_closed.asc().nullsfirst(),
+            IctPersonnel.id.asc(),
+        )
+        .limit(1)
     )
 
     if specialization:
         stmt = stmt.where(IctPersonnel.specialization == specialization)
 
     result = await db.execute(stmt)
-    candidates = result.scalars().all()
-
-    if not candidates:
-        return None
-
-    best = None
-    oldest_closed = None
-
-    for candidate in candidates:
-        last_result = await db.execute(
-            select(func.max(Ticket.closed_at)).where(
-                Ticket.assigned_to_id == candidate.id
-            )
-        )
-        last_closed = last_result.scalar()
-
-        if last_closed is None:
-            return candidate
-
-        if oldest_closed is None or last_closed < oldest_closed:
-            oldest_closed = last_closed
-            best = candidate
-
-    return best
+    return result.scalars().first()
 
 
 # ── Dequeue ────────────────────────────────────────────────────────────────────
@@ -134,8 +132,9 @@ async def create_ticket(
         personnel.availability = Availability.busy
         db.add(personnel)
 
-    await db.commit()
-    await db.refresh(ticket)
+    # Flush (not commit) so ticket.id exists for the audit records below,
+    # without paying for a separate round-trip yet.
+    await db.flush()
 
     await audit_service.create(db, AuditLogCreate(
         staff_id=staff_id,
@@ -151,6 +150,9 @@ async def create_ticket(
             table_name="tickets",
             record_id=str(ticket.id),
         ), user_session)
+
+    await db.commit()
+    await db.refresh(ticket)
 
     return ticket
 
@@ -174,8 +176,6 @@ async def get_ticket(
     ):
         ticket.status = TicketStatus.in_progress
         db.add(ticket)
-        await db.commit()
-        await db.refresh(ticket)
 
         if user_session:
             await audit_service.create(db, AuditLogCreate(
@@ -184,6 +184,9 @@ async def get_ticket(
                 table_name="tickets",
                 record_id=str(ticket.id),
             ), user_session)
+
+        await db.commit()
+        await db.refresh(ticket)
 
     return ticket
 
@@ -226,25 +229,6 @@ async def list_queued_tickets(
     return result.scalars().all()
 
 
-async def list_unresolved_tickets(
-    db: AsyncSession,
-    skip: int = 0,
-    limit: int = 50,
-) -> list[Ticket]:
-    """
-    Admin view — tickets ICT couldn't resolve, now sitting in team view.
-    FIX: updated from old closed+comment filter to match new lifecycle status.
-    """
-    result = await db.execute(
-        select(Ticket)
-        .where(Ticket.status == TicketStatus.unresolved)
-        .order_by(Ticket.created_at.asc())
-        .offset(skip)
-        .limit(limit)
-    )
-    return result.scalars().all()
-
-
 async def list_team_unresolved(
     db: AsyncSession,
     skip: int = 0,
@@ -253,6 +237,10 @@ async def list_team_unresolved(
     """
     Tickets marked unresolved by a technician — visible to all ICT personnel.
     Any available team member can pick these up via pickup_ticket().
+
+    NOTE: list_unresolved_tickets was removed as a duplicate of this function
+    (#4 in the perf report). Any route/import that referenced
+    list_unresolved_tickets should now call list_team_unresolved instead.
     """
     result = await db.execute(
         select(Ticket)
@@ -366,15 +354,15 @@ async def update_ticket(
             personnel.availability = Availability.available
             db.add(personnel)
 
-        await db.commit()
-        await db.refresh(ticket)
-
         await audit_service.create(db, AuditLogCreate(
             staff_id=user_session.staff_id,
             action=AuditAction.TICKET_UPDATED,
             table_name="tickets",
             record_id=str(ticket.id),
         ), user_session)
+
+        await db.commit()
+        await db.refresh(ticket)
 
         # Technician is free — pull next from queue
         if personnel:
@@ -391,15 +379,15 @@ async def update_ticket(
             personnel.availability = Availability.available
             db.add(personnel)
 
-        await db.commit()
-        await db.refresh(ticket)
-
         await audit_service.create(db, AuditLogCreate(
             staff_id=user_session.staff_id,
             action=AuditAction.TICKET_UPDATED,
             table_name="tickets",
             record_id=str(ticket.id),
         ), user_session)
+
+        await db.commit()
+        await db.refresh(ticket)
 
         # Technician is free — pull next from queue
         if personnel:
@@ -408,8 +396,6 @@ async def update_ticket(
     else:
         # Regular update (description, comment, etc.)
         db.add(ticket)
-        await db.commit()
-        await db.refresh(ticket)
 
         await audit_service.create(db, AuditLogCreate(
             staff_id=user_session.staff_id,
@@ -417,6 +403,9 @@ async def update_ticket(
             table_name="tickets",
             record_id=str(ticket.id),
         ), user_session)
+
+        await db.commit()
+        await db.refresh(ticket)
 
     return ticket
 
@@ -451,8 +440,6 @@ async def confirm_ticket(
         ticket.status = TicketStatus.closed
         ticket.closed_at = datetime.now(timezone.utc)
         db.add(ticket)
-        await db.commit()
-        await db.refresh(ticket)
 
         await audit_service.create(db, AuditLogCreate(
             staff_id=staff_id,
@@ -460,6 +447,9 @@ async def confirm_ticket(
             table_name="tickets",
             record_id=str(ticket.id),
         ), user_session)
+
+        await db.commit()
+        await db.refresh(ticket)
 
     else:
         # Staff not happy — reopen and send back to triage queue
@@ -469,8 +459,6 @@ async def confirm_ticket(
         ticket.resolution_notes = None  # cleared for next technician
         ticket.closed_at = None
         db.add(ticket)
-        await db.commit()
-        await db.refresh(ticket)
 
         await audit_service.create(db, AuditLogCreate(
             staff_id=staff_id,
@@ -478,6 +466,9 @@ async def confirm_ticket(
             table_name="tickets",
             record_id=str(ticket.id),
         ), user_session)
+
+        await db.commit()
+        await db.refresh(ticket)
 
     return ticket
 
@@ -522,8 +513,6 @@ async def pickup_ticket(
 
     db.add(ticket)
     db.add(personnel)
-    await db.commit()
-    await db.refresh(ticket)
 
     await audit_service.create(db, AuditLogCreate(
         staff_id=user_session.staff_id,
@@ -531,6 +520,9 @@ async def pickup_ticket(
         table_name="tickets",
         record_id=str(ticket.id),
     ), user_session)
+
+    await db.commit()
+    await db.refresh(ticket)
 
     return ticket
 
@@ -562,15 +554,15 @@ async def reassign_ticket(
     personnel.availability = Availability.busy
     db.add(personnel)
 
-    await db.commit()
-    await db.refresh(ticket)
-
     await audit_service.create(db, AuditLogCreate(
         staff_id=user_session.staff_id,
         action=AuditAction.TICKET_ASSIGNED,
         table_name="tickets",
         record_id=str(ticket.id),
     ), user_session)
+
+    await db.commit()
+    await db.refresh(ticket)
 
     return ticket
 

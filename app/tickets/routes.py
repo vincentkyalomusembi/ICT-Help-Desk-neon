@@ -6,7 +6,7 @@ from app.core.database import get_db
 from app.core.dependencies import CurrentStaff, IctStaff, AdminStaff, CurrentSession
 from app.tickets.service import (
     create_ticket, get_ticket, list_tickets, list_queued_tickets,
-    list_unresolved_tickets, list_team_unresolved, list_pending_confirmation,
+    list_team_unresolved, list_pending_confirmation,
     get_ticket_summary, get_tickets_by_personnel,
     update_ticket, confirm_ticket, pickup_ticket,
     delete_ticket, get_stuck_tickets, reassign_ticket,
@@ -81,7 +81,7 @@ async def unresolved_tickets(
     session: AsyncSession = Depends(get_db),
 ):
     """Tickets closed as unresolved — need follow-up or reassignment."""
-    return await list_unresolved_tickets(session, skip, limit)
+    return await list_team_unresolved(session, skip, limit)
 
 
 # ── ICT team view — must come before /{ticket_id} ─────────────

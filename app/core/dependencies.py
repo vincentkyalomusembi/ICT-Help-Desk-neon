@@ -21,17 +21,37 @@ def _extract_token(request: Request) -> str:
     return token
 
 
-async def _resolve_session(token: str, db: AsyncSession) -> DBSession:
-    result = await db.execute(
-        select(DBSession).where(DBSession.token == token)
-    )
-    db_session = result.scalar_one_or_none()
+async def _resolve_authenticated(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> tuple[Staff, DBSession]:
+    """
+    Single joined query resolving both the session and the staff member
+    together. FastAPI caches this dependency's result per request, so
+    routes depending on both CurrentStaff and CurrentSession only pay
+    for one round-trip instead of two.
+    """
+    token = _extract_token(request)
 
-    if db_session is None:
+    result = await db.execute(
+        select(Staff, DBSession)
+        .join(DBSession, DBSession.staff_id == Staff.id)
+        .where(DBSession.token == token)
+        .options(
+            selectinload(Staff.department),
+            selectinload(Staff.ict_profile),
+        )
+    )
+    row = result.first()
+
+    if row is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid session token.",
         )
+
+    staff, db_session = row
+
     if not db_session.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -44,30 +64,21 @@ async def _resolve_session(token: str, db: AsyncSession) -> DBSession:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session has expired. Please log in again.",
         )
-    return db_session
+
+    return staff, db_session
 
 
 async def get_current_session(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
+    resolved: tuple[Staff, DBSession] = Depends(_resolve_authenticated),
 ) -> DBSession:
-    token = _extract_token(request)
-    return await _resolve_session(token, db)
+    _, db_session = resolved
+    return db_session
 
 
 async def get_current_staff(
-    db_session: DBSession = Depends(get_current_session),
-    db: AsyncSession = Depends(get_db),
+    resolved: tuple[Staff, DBSession] = Depends(_resolve_authenticated),
 ) -> Staff:
-    result = await db.execute(
-        select(Staff)
-        .where(Staff.id == db_session.staff_id)
-        .options(
-            selectinload(Staff.department),
-            selectinload(Staff.ict_profile),
-        )
-    )
-    staff = result.scalar_one_or_none()
+    staff, _ = resolved
 
     if staff is None:
         raise HTTPException(
@@ -75,7 +86,6 @@ async def get_current_staff(
             detail="Staff account no longer exists.",
         )
 
-    # No _session attachment — session is injected separately per route
     return staff
 
 
