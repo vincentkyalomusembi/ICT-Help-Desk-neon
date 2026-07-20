@@ -44,3 +44,7 @@ app.include_router(ict_personnel_router)
 @app.get("/")
 async def home():
     return {"message": "ICT Helpdesk API"}
+
+@app.api_route("/health", methods=["GET", "HEAD"])
+async def health():
+    return {"status": "ok"}
