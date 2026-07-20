@@ -32,7 +32,7 @@ if raw:
             "statement_cache_size": 0,   # this one is real and sufficient
         },
         pool_pre_ping=True,
-        pool_size=2,
+        pool_size=20,
         max_overflow=3,
         pool_recycle=180,
     )
