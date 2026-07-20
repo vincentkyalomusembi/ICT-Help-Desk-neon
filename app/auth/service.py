@@ -82,7 +82,6 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
     staff.failed_attempts = 0
     staff.locked_until = None
     db.add(staff)
-    await db.commit()
 
     # Deactivate any existing active sessions for this staff member
     existing = await db.execute(
@@ -93,6 +92,8 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
     )
     for s in existing.scalars().all():
         s.is_active = False
+
+    # Single commit for both the attempts reset and session deactivation
     await db.commit()
 
     now = datetime.now(timezone.utc)
@@ -105,8 +106,7 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
         is_active=True,
     )
     db.add(session)
-    await db.commit()
-    await db.refresh(session)
+    await db.flush()   # get session.id without committing yet
 
     await audit_service.create(
         session=db,
@@ -119,6 +119,9 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
         ),
         user_session=session,
     )
+
+    await db.commit()   # one final commit for session + audit log
+    await db.refresh(session)
 
     return {
         "message": "Login successful.",
