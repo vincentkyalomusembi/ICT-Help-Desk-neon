@@ -21,8 +21,12 @@ async def create_asset(db: AsyncSession, data: AssetCreate) -> Asset:
 
 
 
-async def get_all_assets(db: AsyncSession) -> list[Asset]:
-    result = await db.execute(select(Asset))
+async def get_all_assets(
+    db: AsyncSession,
+    skip: int = 0,
+    limit: int = 50,
+) -> list[Asset]:
+    result = await db.execute(select(Asset).offset(skip).limit(limit))
     return result.scalars().all()
 
 
@@ -65,8 +69,12 @@ async def allocate_asset(db, data, allocated_by_id):
 
 
 
-async def get_all_allocations(db: AsyncSession) -> list[AssetAllocation]:
-    result = await db.execute(select(AssetAllocation))
+async def get_all_allocations(
+    db: AsyncSession,
+    skip: int = 0,
+    limit: int = 50,
+) -> list[AssetAllocation]:
+    result = await db.execute(select(AssetAllocation).offset(skip).limit(limit))
     return result.scalars().all()
 
 
