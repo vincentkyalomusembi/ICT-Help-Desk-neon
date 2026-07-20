@@ -37,23 +37,6 @@ class StaffService:
             )
         return staff
 
-    async def _attach_active_status(self, items: list[Staff]) -> list[Staff]:
-        """Annotates each Staff object with is_active based on live session data."""
-        if not items:
-            return items
-        now = datetime.now(timezone.utc)
-        ids = [s.id for s in items]
-        result = await self.session.execute(
-            select(AuthSession.staff_id).where(
-                AuthSession.staff_id.in_(ids),
-                AuthSession.is_active == True,
-                AuthSession.expires_at > now,
-            ).distinct()
-        )
-        active_ids = {row[0] for row in result.all()}
-        for s in items:
-            object.__setattr__(s, "is_active", s.id in active_ids)
-        return items
 
     async def _assert_unique_field(
         self,
@@ -168,19 +151,31 @@ class StaffService:
         )
 
     async def get_staff_by_id(self, staff_id: UUID) -> Staff:
+        now = datetime.now(timezone.utc)
+        active_subq = (
+            select(AuthSession.staff_id)
+            .where(
+                AuthSession.is_active == True,
+                AuthSession.expires_at > now,
+            )
+            .distinct()
+            .subquery()
+        )
         stmt = (
-            select(Staff)
+            select(Staff, active_subq.c.staff_id.isnot(None).label("is_active"))
             .where(Staff.id == staff_id)
+            .outerjoin(active_subq, Staff.id == active_subq.c.staff_id)
             .options(selectinload(Staff.department))
         )
         result = await self.session.execute(stmt)
-        staff = result.scalar_one_or_none()
-        if not staff:
+        row = result.first()
+        if not row:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Staff with id '{staff_id}' not found.",
             )
-        await self._attach_active_status([staff])
+        staff, is_active = row
+        object.__setattr__(staff, "is_active", bool(is_active))
         return staff
 
     async def get_staff_by_email(self, email: str) -> Optional[Staff]:
@@ -206,7 +201,21 @@ class StaffService:
         department_id: Optional[int] = None,
         role: Optional[UserRole] = None,
     ) -> list[Staff]:
-        stmt = select(Staff).options(selectinload(Staff.department))
+        now = datetime.now(timezone.utc)
+        active_subq = (
+            select(AuthSession.staff_id)
+            .where(
+                AuthSession.is_active == True,
+                AuthSession.expires_at > now,
+            )
+            .distinct()
+            .subquery()
+        )
+        stmt = (
+            select(Staff, active_subq.c.staff_id.isnot(None).label("is_active"))
+            .outerjoin(active_subq, Staff.id == active_subq.c.staff_id)
+            .options(selectinload(Staff.department))
+        )
 
         if role is not None:
             stmt = stmt.where(Staff.role == role)
@@ -217,7 +226,13 @@ class StaffService:
 
         stmt = stmt.offset(skip).limit(limit)
         result = await self.session.execute(stmt)
-        return await self._attach_active_status(list(result.scalars().all()))
+        rows = result.all()
+
+        staff_list = []
+        for staff, is_active in rows:
+            object.__setattr__(staff, "is_active", bool(is_active))
+            staff_list.append(staff)
+        return staff_list
 
     async def _ensure_ict_personnel_record(self, staff_id: UUID) -> None:
         """
@@ -324,7 +339,6 @@ class StaffService:
         self.session.add(staff)
         await self.session.commit()
         await self.session.refresh(staff)
-        await self._attach_active_status([staff])
         return staff
 
     async def delete_staff(self, staff_id: UUID) -> None:
