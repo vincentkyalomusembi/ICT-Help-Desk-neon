@@ -48,6 +48,7 @@ async def create_staff(
     payload: StaffCreate,
     session: AsyncSession = Depends(get_db),
 ):
+    payload.role = UserRole.staff
     return await StaffService(session).create_staff(payload)
 
 
