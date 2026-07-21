@@ -3,9 +3,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.core.dependencies import get_current_staff
+from app.core.dependencies import get_current_staff, AdminStaff
 from app.core.config import settings
-from app.staff.model import Staff, UserRole
+from app.staff.model import Staff
 from app.auth.schemas import LoginRequest, LoginResponse, SessionResponse
 from app.auth import service
 from app.auth.magic import verify_magic_token, resend_magic_token
@@ -13,17 +13,6 @@ from app.auth.password_reset import request_password_reset, reset_password
 from app.staff.schemas import PasswordResetRequest, PasswordResetConfirm
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
-
-
-# Permission Helpers
-
-def require_admin(current: Staff = Depends(get_current_staff)) -> Staff:
-    if current.role != UserRole.admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required.",
-        )
-    return current
 
 
 # Routes
@@ -108,7 +97,7 @@ async def my_sessions(
     summary="List all sessions (admin only)",
 )
 async def all_sessions(
-    _: Staff = Depends(require_admin),
+    _: AdminStaff,
     db: AsyncSession = Depends(get_db),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -131,7 +120,7 @@ async def all_sessions(
 )
 async def force_logout(
     staff_id: UUID,
-    _: Staff = Depends(require_admin),
+    _: AdminStaff,
     db: AsyncSession = Depends(get_db),
 ):
     count = await service.logout_all(db, staff_id)
