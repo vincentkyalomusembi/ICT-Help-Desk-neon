@@ -1,11 +1,12 @@
 from uuid import UUID
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status, HTTPException
+from fastapi import APIRouter, Depends, Query, status, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_staff, AdminStaff
+from app.core.limiter import limiter
 from app.staff.model import Staff, UserRole
 from app.staff.schemas import (
     StaffCreate, StaffCreateResponse, StaffResponse, StaffUpdate,
@@ -28,7 +29,8 @@ staff_router = APIRouter(prefix="/staff", tags=["Staff"])
 
 
 @staff_router.post("/", response_model=StaffCreateResponse, status_code=status.HTTP_201_CREATED, summary="Register a new staff member")
-async def create_staff(payload: StaffCreate, session: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def create_staff(request: Request, payload: StaffCreate, session: AsyncSession = Depends(get_db)):
     return await StaffService(session).create_staff(payload)
 
 
