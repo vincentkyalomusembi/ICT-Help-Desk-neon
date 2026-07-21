@@ -11,7 +11,7 @@ from app.auth import service
 from app.auth.magic import verify_magic_token, resend_magic_token
 from app.auth.password_reset import request_password_reset, reset_password
 from app.staff.schemas import PasswordResetRequest, PasswordResetConfirm
-
+from app.core.limiter import limiter
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
@@ -22,6 +22,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
     status_code=status.HTTP_200_OK,
     summary="Login and receive a session cookie",
 )
+@limiter.limit("5/minute")
 async def login(
     payload: LoginRequest,
     request: Request,
@@ -145,7 +146,9 @@ async def verify_email(
     status_code=status.HTTP_200_OK,
     summary="Resend magic link verification email",
 )
+@limiter.limit("5/minute")
 async def resend_verification(
+    request: Request,
     email: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
@@ -158,7 +161,9 @@ async def resend_verification(
     status_code=status.HTTP_200_OK,
     summary="Request a password reset link",
 )
+@limiter.limit("5/minute")
 async def forgot_password(
+    request: Request,
     payload: PasswordResetRequest,
     session: AsyncSession = Depends(get_db),
 ):
