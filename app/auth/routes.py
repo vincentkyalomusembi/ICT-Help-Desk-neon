@@ -1,6 +1,6 @@
 from uuid import UUID
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import get_current_staff, AdminStaff
@@ -149,12 +149,12 @@ async def verify_email(
 @limiter.limit("5/minute")
 async def resend_verification(
     request: Request,
+    background_tasks: BackgroundTasks,
     email: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
-    await resend_magic_token(db, email)
+    await resend_magic_token(db, background_tasks, email)
     return {"message": "Verification email resent. Please check your inbox."}
-
 
 @router.post(
     "/forgot-password",
@@ -164,12 +164,12 @@ async def resend_verification(
 @limiter.limit("5/minute")
 async def forgot_password(
     request: Request,
+    background_tasks: BackgroundTasks,
     payload: PasswordResetRequest,
     session: AsyncSession = Depends(get_db),
 ):
-    await request_password_reset(session, payload.email)
+    await request_password_reset(session, background_tasks, payload.email)
     return {"message": "Password reset link sent. Check your email."}
-
 
 @router.post(
     "/reset-password",
