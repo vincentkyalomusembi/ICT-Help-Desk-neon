@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import update
 from sqlalchemy.orm import selectinload
 from app.auth.model import Session as DBSession
 from app.auth.schemas import LoginRequest
@@ -83,15 +84,16 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
     staff.locked_until = None
     db.add(staff)
 
-    # Deactivate any existing active sessions for this staff member
-    existing = await db.execute(
-        select(DBSession).where(
+    # Deactivate any existing active sessions for this staff member — single
+    # bulk UPDATE instead of loading each row and mutating it individually.
+    await db.execute(
+        update(DBSession)
+        .where(
             DBSession.staff_id == staff.id,
             DBSession.is_active == True,
         )
+        .values(is_active=False)
     )
-    for s in existing.scalars().all():
-        s.is_active = False
 
     # Single commit for both the attempts reset and session deactivation
     await db.commit()
