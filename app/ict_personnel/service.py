@@ -140,11 +140,11 @@ class IctPersonnelService:
         return await self._load(session, personnel.id)
 
     async def update_by_staff_id(
-    self,
-    session: AsyncSession,
-    staff_id: UUID,
-    payload: IctPersonnelSelfUpdate,
-) -> Optional[IctPersonnel]:
+        self,
+        session: AsyncSession,
+        staff_id: UUID,
+        payload: IctPersonnelSelfUpdate,
+    ) -> Optional[IctPersonnel]:
         """
         Allows a technician to update their own profile using their staff_id.
         Delegates to update() once the personnel record is located.
@@ -153,7 +153,7 @@ class IctPersonnelService:
         if personnel is None:
             return None
         return await self.update(session, personnel.id, payload)
-
+    
     async def set_duty_status(
         self,
         session: AsyncSession,
