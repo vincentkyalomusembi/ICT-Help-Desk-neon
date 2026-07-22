@@ -74,8 +74,8 @@ class Staff(SQLModel, table=True):
     # Timestamp when staff acknowledged the Information Security Policy.
     # Required by ICTA.3.002:2019 section 12.1 and the Help Desk ISP.
     # Null means not yet acknowledged — used to enforce policy gate on login.
-    policy_acknowledged_at: Optional[datetime] = Field(
-        sa_column=Column(TIMESTAMP(timezone=True), nullable=False, default=None)
+    policy_acknowledged_at: datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
     )
 
     directorate: Optional["Directorate"] = Relationship(back_populates="staff")

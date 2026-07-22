@@ -6,7 +6,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from sqlalchemy.orm import selectinload
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, BackgroundTasks
 
 from app.staff.model import Staff, Directorate, Department, UserRole
 from app.staff.schemas import (
@@ -101,7 +101,7 @@ class StaffService:
 
     # ── Staff CRUD ────────────────────────────────────────────────────────────
 
-    async def create_staff(self, payload: StaffCreate) -> StaffCreateResponse:
+    async def create_staff(self, payload: StaffCreate, background_tasks: BackgroundTasks) -> StaffCreateResponse:
         await self._assert_unique_field("personal_number", payload.personal_number)
         await self._assert_unique_field("email", payload.email)
 
@@ -134,15 +134,19 @@ class StaffService:
         await self.session.commit()
         await self.session.refresh(staff)
 
-        try:
-            token = await create_magic_token(self.session, staff.id)
-            await send_magic_link(staff.email, staff.full_name, token)
-            logger.info(f"Magic link email sent to {staff.email}")
-        except Exception as e:
-            logger.error(
-                f"Failed to send magic link to {staff.email}: {e}",
-                exc_info=True,
-            )
+        token = await create_magic_token(self.session, staff.id)
+
+        async def _send_magic_link_safe():
+            try:
+                await send_magic_link(staff.email, staff.full_name, token)
+                logger.info(f"Magic link email sent to {staff.email}")
+            except Exception as e:
+                logger.error(
+                    f"Failed to send magic link to {staff.email}: {e}",
+                    exc_info=True,
+                )
+
+        background_tasks.add_task(_send_magic_link_safe)
 
         return StaffCreateResponse(
             message="Account created successfully. Check your email to activate your account.",

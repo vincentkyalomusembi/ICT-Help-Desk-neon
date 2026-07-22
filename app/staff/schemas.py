@@ -74,15 +74,24 @@ class StaffCreate(BaseModel):
     role: UserRole = UserRole.staff
     password: str
     confirm_password: str
-    # NEW: Whether the staff member acknowledged the Information Security Policy
+    # Whether the staff member acknowledged the Information Security Policy
     # at registration. Required by ICTA.3.002:2019 section 12.1.
-    # Defaults to False — admin must explicitly pass True to record acknowledgement.
+    # Must be True — registration is rejected otherwise (see validator below).
     policy_acknowledged: bool = False
 
     @field_validator("password")
     @classmethod
     def password_strength(cls, v: str) -> str:
         return validate_password_strength(v)
+
+    @field_validator("policy_acknowledged")
+    @classmethod
+    def must_acknowledge_policy(cls, v: bool) -> bool:
+        if not v:
+            raise ValueError(
+                "You must acknowledge the Information Security Policy to register."
+            )
+        return v
 
     @model_validator(mode="after")
     def passwords_match(self) -> "StaffCreate":

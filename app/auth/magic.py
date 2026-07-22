@@ -3,7 +3,7 @@ import secrets
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, BackgroundTasks
 from app.auth.model import MagicLinkToken
 from app.staff.model import Staff
 from app.core.config import settings
@@ -47,7 +47,7 @@ async def verify_magic_token(db: AsyncSession, token: str) -> None:
     await db.commit()
 
 
-async def resend_magic_token(db: AsyncSession, email: str) -> None:
+async def resend_magic_token(db: AsyncSession, background_tasks: BackgroundTasks, email: str) -> None:
     result = await db.execute(select(Staff).where(Staff.email == email))
     staff = result.scalar_one_or_none()
 
@@ -64,4 +64,4 @@ async def resend_magic_token(db: AsyncSession, email: str) -> None:
         )
 
     token = await create_magic_token(db, staff.id)
-    await send_magic_link(staff.email, staff.full_name, token)
+    background_tasks.add_task(send_magic_link, staff.email, staff.full_name, token)

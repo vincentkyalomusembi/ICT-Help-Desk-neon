@@ -1,29 +1,18 @@
 from uuid import UUID
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.core.dependencies import get_current_staff
+from app.core.dependencies import get_current_staff, AdminStaff
 from app.core.config import settings
-from app.staff.model import Staff, UserRole
+from app.staff.model import Staff
 from app.auth.schemas import LoginRequest, LoginResponse, SessionResponse
 from app.auth import service
 from app.auth.magic import verify_magic_token, resend_magic_token
 from app.auth.password_reset import request_password_reset, reset_password
 from app.staff.schemas import PasswordResetRequest, PasswordResetConfirm
-
+from app.core.limiter import limiter
 router = APIRouter(prefix="/auth", tags=["Auth"])
-
-
-# Permission Helpers
-
-def require_admin(current: Staff = Depends(get_current_staff)) -> Staff:
-    if current.role != UserRole.admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required.",
-        )
-    return current
 
 
 # Routes
@@ -33,6 +22,7 @@ def require_admin(current: Staff = Depends(get_current_staff)) -> Staff:
     status_code=status.HTTP_200_OK,
     summary="Login and receive a session cookie",
 )
+@limiter.limit("5/minute")
 async def login(
     payload: LoginRequest,
     request: Request,
@@ -108,7 +98,7 @@ async def my_sessions(
     summary="List all sessions (admin only)",
 )
 async def all_sessions(
-    _: Staff = Depends(require_admin),
+    _: AdminStaff,
     db: AsyncSession = Depends(get_db),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -131,7 +121,7 @@ async def all_sessions(
 )
 async def force_logout(
     staff_id: UUID,
-    _: Staff = Depends(require_admin),
+    _: AdminStaff,
     db: AsyncSession = Depends(get_db),
 ):
     count = await service.logout_all(db, staff_id)
@@ -156,26 +146,30 @@ async def verify_email(
     status_code=status.HTTP_200_OK,
     summary="Resend magic link verification email",
 )
+@limiter.limit("5/minute")
 async def resend_verification(
+    request: Request,
+    background_tasks: BackgroundTasks,
     email: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
-    await resend_magic_token(db, email)
+    await resend_magic_token(db, background_tasks, email)
     return {"message": "Verification email resent. Please check your inbox."}
-
 
 @router.post(
     "/forgot-password",
     status_code=status.HTTP_200_OK,
     summary="Request a password reset link",
 )
+@limiter.limit("5/minute")
 async def forgot_password(
+    request: Request,
+    background_tasks: BackgroundTasks,
     payload: PasswordResetRequest,
     session: AsyncSession = Depends(get_db),
 ):
-    await request_password_reset(session, payload.email)
+    await request_password_reset(session, background_tasks, payload.email)
     return {"message": "Password reset link sent. Check your email."}
-
 
 @router.post(
     "/reset-password",
