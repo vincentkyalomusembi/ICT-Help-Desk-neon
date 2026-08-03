@@ -37,10 +37,6 @@ async def _resolve_authenticated(
         select(Staff, DBSession)
         .join(DBSession, DBSession.staff_id == Staff.id)
         .where(DBSession.token == token)
-        .options(
-            selectinload(Staff.department),
-            selectinload(Staff.ict_profile),
-        )
     )
     row = result.first()
 
@@ -100,6 +96,36 @@ async def get_current_active_staff(
     return current
 
 
+async def get_current_staff_with_department(
+    current: Staff = Depends(get_current_active_staff),
+    db: AsyncSession = Depends(get_db),
+) -> Staff:
+    """Use on staff-profile endpoints that need current.department."""
+    if "department" not in current.__dict__:
+        result = await db.execute(
+            select(Staff)
+            .where(Staff.id == current.id)
+            .options(selectinload(Staff.department))
+        )
+        current = result.scalar_one()
+    return current
+
+
+async def get_current_staff_with_ict_profile(
+    current: Staff = Depends(get_current_active_staff),
+    db: AsyncSession = Depends(get_db),
+) -> Staff:
+    """Use on ICT/ticket-assignment endpoints that need current.ict_profile."""
+    if "ict_profile" not in current.__dict__:
+        result = await db.execute(
+            select(Staff)
+            .where(Staff.id == current.id)
+            .options(selectinload(Staff.ict_profile))
+        )
+        current = result.scalar_one()
+    return current
+
+
 async def require_admin(
     current: Staff = Depends(get_current_active_staff),
 ) -> Staff:
@@ -121,9 +147,25 @@ async def require_ict(
         )
     return current
 
+async def require_ict_with_profile(
+    current: Staff = Depends(require_ict),
+    db: AsyncSession = Depends(get_db),
+) -> Staff:
+    """Use on ICT-only endpoints that also need current.ict_profile."""
+    if "ict_profile" not in current.__dict__:
+        result = await db.execute(
+            select(Staff)
+            .where(Staff.id == current.id)
+            .options(selectinload(Staff.ict_profile))
+        )
+        current = result.scalar_one()
+    return current
 
 # Type aliases
 CurrentStaff = Annotated[Staff, Depends(get_current_active_staff)]
 AdminStaff = Annotated[Staff, Depends(require_admin)]
 IctStaff = Annotated[Staff, Depends(require_ict)]
+IctStaffWithProfile = Annotated[Staff, Depends(require_ict_with_profile)]
 CurrentSession = Annotated[DBSession, Depends(get_current_session)]
+StaffWithDepartment = Annotated[Staff, Depends(get_current_staff_with_department)]
+StaffWithIctProfile = Annotated[Staff, Depends(get_current_staff_with_ict_profile)]
