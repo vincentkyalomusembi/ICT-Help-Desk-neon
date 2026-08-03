@@ -11,6 +11,7 @@ from app.staff.routes import staff_router, directorate_router, department_router
 from app.audit.routes import router as audit_router
 from app.tickets.routes import router as tickets_router
 from app.ict_personnel.routes import router as ict_personnel_router
+from app.dashboard.routes import router as dashboard_router
 
 
 @asynccontextmanager
@@ -45,6 +46,7 @@ app.include_router(department_router)
 app.include_router(audit_router)
 app.include_router(tickets_router)
 app.include_router(ict_personnel_router)
+app.include_router(dashboard_router)
 
 
 @app.get("/")
