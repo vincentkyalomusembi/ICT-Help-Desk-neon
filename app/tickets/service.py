@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
+from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 from uuid import UUID
@@ -24,6 +25,16 @@ CATEGORY_TO_SPECIALIZATION = {
     TicketCategory.access_permissions: Specialization.software_and_systems,
     TicketCategory.other:              None,
 }
+
+
+# NEW: every function that returns a Ticket destined for TicketResponse
+# serialization needs `staff` loaded, since TicketResponse.raised_by reads
+# from it. A plain `await db.refresh(ticket)` after commit only guarantees
+# column attributes are fresh — it does not reliably reload relationship
+# attributes in async SQLAlchemy. Call this explicitly after every commit
+# whose resulting ticket gets returned to a route.
+async def _reload_staff(db: AsyncSession, ticket: Ticket) -> None:
+    await db.refresh(ticket, attribute_names=["staff"])
 
 
 # ── Auto Assignment ────────────────────────────────────────────────────────────
@@ -153,6 +164,7 @@ async def create_ticket(
 
     await db.commit()
     await db.refresh(ticket)
+    await _reload_staff(db, ticket)  # NEW
 
     return ticket
 
@@ -163,7 +175,11 @@ async def get_ticket(
     viewer_personnel_id: Optional[int] = None,
     user_session: Optional[UserSession] = None,
 ) -> Optional[Ticket]:
-    result = await db.execute(select(Ticket).where(Ticket.id == ticket_id))
+    result = await db.execute(
+        select(Ticket)
+        .options(selectinload(Ticket.staff))  # NEW
+        .where(Ticket.id == ticket_id)
+    )
     ticket = result.scalar_one_or_none()
 
     if not ticket:
@@ -187,6 +203,7 @@ async def get_ticket(
 
         await db.commit()
         await db.refresh(ticket)
+        await _reload_staff(db, ticket)  # NEW
 
     return ticket
 
@@ -198,7 +215,11 @@ async def list_tickets(
     staff_id: Optional[UUID] = None,
     assigned_to_id: Optional[int] = None,
 ) -> list[Ticket]:
-    stmt = select(Ticket).order_by(Ticket.created_at.asc())
+    stmt = (
+        select(Ticket)
+        .options(selectinload(Ticket.staff))  # NEW
+        .order_by(Ticket.created_at.asc())
+    )
 
     if staff_id:
         stmt = stmt.where(Ticket.staff_id == staff_id)
@@ -218,6 +239,7 @@ async def list_queued_tickets(
     """Unassigned tickets waiting for a specialist to become available."""
     result = await db.execute(
         select(Ticket)
+        .options(selectinload(Ticket.staff))  # NEW
         .where(
             Ticket.assigned_to_id == None,  # noqa: E711
             Ticket.status == TicketStatus.open,
@@ -244,6 +266,7 @@ async def list_team_unresolved(
     """
     result = await db.execute(
         select(Ticket)
+        .options(selectinload(Ticket.staff))  # NEW
         .where(Ticket.status == TicketStatus.unresolved)
         .order_by(Ticket.created_at.asc())
         .offset(skip)
@@ -264,6 +287,7 @@ async def list_pending_confirmation(
     """
     result = await db.execute(
         select(Ticket)
+        .options(selectinload(Ticket.staff))  # NEW
         .where(
             Ticket.staff_id == staff_id,
             Ticket.status == TicketStatus.pending_confirmation,
@@ -363,6 +387,7 @@ async def update_ticket(
 
         await db.commit()
         await db.refresh(ticket)
+        await _reload_staff(db, ticket)  # NEW
 
         # Technician is free — pull next from queue
         if personnel:
@@ -388,6 +413,7 @@ async def update_ticket(
 
         await db.commit()
         await db.refresh(ticket)
+        await _reload_staff(db, ticket)  # NEW
 
         # Technician is free — pull next from queue
         if personnel:
@@ -406,6 +432,7 @@ async def update_ticket(
 
         await db.commit()
         await db.refresh(ticket)
+        await _reload_staff(db, ticket)  # NEW
 
     return ticket
 
@@ -421,7 +448,11 @@ async def confirm_ticket(
     Staff confirms or rejects a resolved ticket.
     Technician is already released — this only affects ticket status.
     """
-    result = await db.execute(select(Ticket).where(Ticket.id == ticket_id))
+    result = await db.execute(
+        select(Ticket)
+        .options(selectinload(Ticket.staff))  # NEW
+        .where(Ticket.id == ticket_id)
+    )
     ticket = result.scalar_one_or_none()
 
     if not ticket:
@@ -450,6 +481,7 @@ async def confirm_ticket(
 
         await db.commit()
         await db.refresh(ticket)
+        await _reload_staff(db, ticket)  # NEW
 
     else:
         # Staff not happy — reopen and send back to triage queue
@@ -469,6 +501,7 @@ async def confirm_ticket(
 
         await db.commit()
         await db.refresh(ticket)
+        await _reload_staff(db, ticket)  # NEW
 
     return ticket
 
@@ -483,7 +516,11 @@ async def pickup_ticket(
     Any available ICT team member picks up an unresolved ticket from the
     team view. No specialization restriction — already escalated.
     """
-    result = await db.execute(select(Ticket).where(Ticket.id == ticket_id))
+    result = await db.execute(
+        select(Ticket)
+        .options(selectinload(Ticket.staff))  # NEW
+        .where(Ticket.id == ticket_id)
+    )
     ticket = result.scalar_one_or_none()
 
     if not ticket:
@@ -523,6 +560,7 @@ async def pickup_ticket(
 
     await db.commit()
     await db.refresh(ticket)
+    await _reload_staff(db, ticket)  # NEW
 
     return ticket
 
@@ -563,6 +601,7 @@ async def reassign_ticket(
 
     await db.commit()
     await db.refresh(ticket)
+    await _reload_staff(db, ticket)  # NEW
 
     return ticket
 
@@ -608,6 +647,7 @@ async def get_stuck_tickets(
     cutoff = datetime.now(timezone.utc) - timedelta(hours=threshold_hours)
     result = await db.execute(
         select(Ticket)
+        .options(selectinload(Ticket.staff))  # NEW
         .where(
             Ticket.status.in_([
                 TicketStatus.open,
