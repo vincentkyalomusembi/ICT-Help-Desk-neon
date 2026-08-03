@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 
 from app.audit.schemas import AuditLogCreate
 from app.audit.model import AuditLog
@@ -26,8 +27,7 @@ class AuditService:
             mac_address=log_in.mac_address,
         )
         session.add(log)
-        await session.commit()
-        await session.refresh(log)
+        await session.flush()  # joins parent transaction, no extra commit
         return log
 
     async def create_system(
@@ -47,8 +47,7 @@ class AuditService:
             mac_address=log_in.mac_address,
         )
         session.add(log)
-        await session.commit()
-        await session.refresh(log)
+        await session.flush()  # joins parent transaction, no extra commit
         return log
 
     async def list(
@@ -57,12 +56,22 @@ class AuditService:
         skip: int = 0,
         limit: int = 50
     ) -> List[AuditLog]:
-        stmt = select(AuditLog).order_by(AuditLog.id.desc()).offset(skip).limit(limit)
+        stmt = (
+            select(AuditLog)
+            .options(selectinload(AuditLog.staff))
+            .order_by(AuditLog.id.desc())
+            .offset(skip)
+            .limit(limit)
+        )
         result = await session.execute(stmt)
         return list(result.scalars().all())
 
     async def get(self, session: AsyncSession, log_id: int) -> Optional[AuditLog]:
-        stmt = select(AuditLog).where(AuditLog.id == log_id)
+        stmt = (
+            select(AuditLog)
+            .options(selectinload(AuditLog.staff))
+            .where(AuditLog.id == log_id)
+        )
         result = await session.execute(stmt)
         return result.scalars().first()
 

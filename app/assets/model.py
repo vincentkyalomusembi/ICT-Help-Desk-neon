@@ -12,24 +12,22 @@ if TYPE_CHECKING:
 
 
 class DeviceType(str, enum.Enum):
-    laptop = "LAPTOP"
-    desktop = "DESKTOP"
-    printer = "PRINTER"
-    monitor = "MONITOR"
-    other = "OTHER"
-
+    laptop = "laptop"
+    desktop = "desktop"
+    printer = "printer"
+    monitor = "monitor"
+    other = "other"
 
 class AssetClassification(str, enum.Enum):
-    confidential = "CONFIDENTIAL"
-    internal = "INTERNAL"
-    public = "PUBLIC"
-
+    confidential = "confidential"
+    internal = "internal"
+    public = "public"
 
 class AssetCondition(str, enum.Enum):
-    good = "GOOD"
-    fair = "FAIR"
-    poor = "POOR"
-    decommissioned = "DECOMMISSIONED"
+    good = "good"
+    fair = "fair"
+    poor = "poor"
+    decommissioned = "decommissioned"
 
 
 class Asset(SQLModel, table=True):
@@ -56,11 +54,15 @@ class AssetAllocation(SQLModel, table=True):
     __tablename__ = "asset_allocations"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    asset_id: int = Field(foreign_key="assets.id")
-    staff_id: UUID = Field(foreign_key="staff.id")  
+    asset_id: int = Field(foreign_key="assets.id", index=True)
+    staff_id: UUID = Field(foreign_key="staff.id", index=True)
+    allocated_by_id: UUID = Field(foreign_key="staff.id", index=True)
     allocation_date: date
-    return_date: Optional[date] = Field(default=None)
+    return_date: Optional[date] = Field(default=None, index=True)
     notes: Optional[str] = Field(default=None)
 
     asset: Optional["Asset"] = Relationship(back_populates="allocations")
-    staff: Optional["Staff"] = Relationship(back_populates="asset_allocations")
+    staff: Optional["Staff"] = Relationship(
+        back_populates="asset_allocations",
+        sa_relationship_kwargs={"foreign_keys": "[AssetAllocation.staff_id]"},
+    )

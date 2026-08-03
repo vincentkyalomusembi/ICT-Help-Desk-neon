@@ -16,9 +16,9 @@ if TYPE_CHECKING:
 
 
 class UserRole(str, enum.Enum):
-    admin = "ADMIN"
-    staff = "STAFF"
-    ict_personnel = "ICT_PERSONNEL"
+    admin = "admin"
+    staff = "staff"
+    ict_personnel = "ict_personnel"
 
 
 class Directorate(SQLModel, table=True):
@@ -36,7 +36,7 @@ class Department(SQLModel, table=True):
     __tablename__ = "departments"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    directorate_id: int = Field(foreign_key="directorates.id")
+    directorate_id: int = Field(foreign_key="directorates.id", index=True)
     name: str = Field(max_length=100, unique=True, index=True)
     description: Optional[str] = Field(default=None)
 
@@ -54,11 +54,11 @@ class Staff(SQLModel, table=True):
     full_name: str = Field(max_length=100)
     email: str = Field(max_length=100, unique=True, index=True)
     phone_number: Optional[str] = Field(default=None, max_length=15)
-    directorate_id: int = Field(foreign_key="directorates.id")
-    department_id: int = Field(foreign_key="departments.id")
+    directorate_id: int = Field(foreign_key="directorates.id", index=True)
+    department_id: int = Field(foreign_key="departments.id", index=True)
     office_location: Optional[str] = Field(default=None, max_length=100)
     office_number: str = Field(max_length=20)
-    role: UserRole = Field(default=UserRole.staff, sa_column_kwargs={"nullable": False})
+    role: UserRole = Field(default=UserRole.staff, index=True, sa_column_kwargs={"nullable": False})
     password_hash: str
     failed_attempts: int = Field(default=0)
     locked_until: Optional[datetime] = Field(
@@ -71,11 +71,20 @@ class Staff(SQLModel, table=True):
     created_at: datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
     )
+    # Timestamp when staff acknowledged the Information Security Policy.
+    # Required by ICTA.3.002:2019 section 12.1 and the Help Desk ISP.
+    # Null means not yet acknowledged — used to enforce policy gate on login.
+    policy_acknowledged_at: datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
+    )
 
     directorate: Optional["Directorate"] = Relationship(back_populates="staff")
     department: Optional["Department"] = Relationship(back_populates="staff")
     ict_profile: Optional["IctPersonnel"] = Relationship(back_populates="staff")
     tickets: List["Ticket"] = Relationship(back_populates="staff")
-    asset_allocations: List["AssetAllocation"] = Relationship(back_populates="staff")
+    asset_allocations: List["AssetAllocation"] = Relationship(
+        back_populates="staff",
+        sa_relationship_kwargs={"foreign_keys": "[AssetAllocation.staff_id]"},
+    )
     audit_logs: List["AuditLog"] = Relationship(back_populates="staff")
     sessions: List["Session"] = Relationship(back_populates="staff")

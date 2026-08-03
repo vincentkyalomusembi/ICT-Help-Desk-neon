@@ -4,6 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from app.audit.model import AuditAction
+from app.auth.schemas import StaffBasic
 
 
 class AuditLogCreate(BaseModel):
@@ -24,6 +25,7 @@ class AuditLogResponse(BaseModel):
     ip_address: Optional[str]
     mac_address: Optional[str]
     created_at: datetime
+    staff: Optional[StaffBasic] = None
 
     class Config:
         from_attributes = True

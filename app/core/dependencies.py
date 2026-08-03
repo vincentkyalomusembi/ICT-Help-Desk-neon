@@ -21,17 +21,33 @@ def _extract_token(request: Request) -> str:
     return token
 
 
-async def _resolve_session(token: str, db: AsyncSession) -> DBSession:
-    result = await db.execute(
-        select(DBSession).where(DBSession.token == token)
-    )
-    db_session = result.scalar_one_or_none()
+async def _resolve_authenticated(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> tuple[Staff, DBSession]:
+    """
+    Single joined query resolving both the session and the staff member
+    together. FastAPI caches this dependency's result per request, so
+    routes depending on both CurrentStaff and CurrentSession only pay
+    for one round-trip instead of two.
+    """
+    token = _extract_token(request)
 
-    if db_session is None:
+    result = await db.execute(
+        select(Staff, DBSession)
+        .join(DBSession, DBSession.staff_id == Staff.id)
+        .where(DBSession.token == token)
+    )
+    row = result.first()
+
+    if row is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid session token.",
         )
+
+    staff, db_session = row
+
     if not db_session.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -44,30 +60,21 @@ async def _resolve_session(token: str, db: AsyncSession) -> DBSession:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session has expired. Please log in again.",
         )
-    return db_session
+
+    return staff, db_session
 
 
 async def get_current_session(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
+    resolved: tuple[Staff, DBSession] = Depends(_resolve_authenticated),
 ) -> DBSession:
-    token = _extract_token(request)
-    return await _resolve_session(token, db)
+    _, db_session = resolved
+    return db_session
 
 
 async def get_current_staff(
-    db_session: DBSession = Depends(get_current_session),
-    db: AsyncSession = Depends(get_db),
+    resolved: tuple[Staff, DBSession] = Depends(_resolve_authenticated),
 ) -> Staff:
-    result = await db.execute(
-        select(Staff)
-        .where(Staff.id == db_session.staff_id)
-        .options(
-            selectinload(Staff.department),
-            selectinload(Staff.ict_profile),
-        )
-    )
-    staff = result.scalar_one_or_none()
+    staff, _ = resolved
 
     if staff is None:
         raise HTTPException(
@@ -75,7 +82,6 @@ async def get_current_staff(
             detail="Staff account no longer exists.",
         )
 
-    # No _session attachment — session is injected separately per route
     return staff
 
 
@@ -87,6 +93,36 @@ async def get_current_active_staff(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Account is locked until {current.locked_until.isoformat()}.",
         )
+    return current
+
+
+async def get_current_staff_with_department(
+    current: Staff = Depends(get_current_active_staff),
+    db: AsyncSession = Depends(get_db),
+) -> Staff:
+    """Use on staff-profile endpoints that need current.department."""
+    if "department" not in current.__dict__:
+        result = await db.execute(
+            select(Staff)
+            .where(Staff.id == current.id)
+            .options(selectinload(Staff.department))
+        )
+        current = result.scalar_one()
+    return current
+
+
+async def get_current_staff_with_ict_profile(
+    current: Staff = Depends(get_current_active_staff),
+    db: AsyncSession = Depends(get_db),
+) -> Staff:
+    """Use on ICT/ticket-assignment endpoints that need current.ict_profile."""
+    if "ict_profile" not in current.__dict__:
+        result = await db.execute(
+            select(Staff)
+            .where(Staff.id == current.id)
+            .options(selectinload(Staff.ict_profile))
+        )
+        current = result.scalar_one()
     return current
 
 
@@ -111,9 +147,25 @@ async def require_ict(
         )
     return current
 
+async def require_ict_with_profile(
+    current: Staff = Depends(require_ict),
+    db: AsyncSession = Depends(get_db),
+) -> Staff:
+    """Use on ICT-only endpoints that also need current.ict_profile."""
+    if "ict_profile" not in current.__dict__:
+        result = await db.execute(
+            select(Staff)
+            .where(Staff.id == current.id)
+            .options(selectinload(Staff.ict_profile))
+        )
+        current = result.scalar_one()
+    return current
 
 # Type aliases
 CurrentStaff = Annotated[Staff, Depends(get_current_active_staff)]
 AdminStaff = Annotated[Staff, Depends(require_admin)]
 IctStaff = Annotated[Staff, Depends(require_ict)]
+IctStaffWithProfile = Annotated[Staff, Depends(require_ict_with_profile)]
 CurrentSession = Annotated[DBSession, Depends(get_current_session)]
+StaffWithDepartment = Annotated[Staff, Depends(get_current_staff_with_department)]
+StaffWithIctProfile = Annotated[Staff, Depends(get_current_staff_with_ict_profile)]

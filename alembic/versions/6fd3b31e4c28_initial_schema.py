@@ -1,8 +1,8 @@
 """initial_schema
 
-Revision ID: c20d7cd00688
+Revision ID: 6fd3b31e4c28
 Revises: 
-Create Date: 2026-06-10 10:33:13.819598
+Create Date: 2026-07-07 14:19:48.388044
 
 """
 from typing import Sequence, Union
@@ -10,10 +10,11 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-import sqlmodel.sql.sqltypes
+import sqlmodel
+
 
 # revision identifiers, used by Alembic.
-revision: str = 'c20d7cd00688'
+revision: str = '6fd3b31e4c28'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -27,10 +28,10 @@ def upgrade() -> None:
     sa.Column('asset_tag', sqlmodel.sql.sqltypes.AutoString(length=50), nullable=False),
     sa.Column('serial_number', sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False),
     sa.Column('device_type', sa.Enum('laptop', 'desktop', 'printer', 'monitor', 'other', name='devicetype'), nullable=False),
-    sa.Column('brand', sqlmodel.sql.sqltypes.AutoString(length=50), nullable=False),
-    sa.Column('model', sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False),
     sa.Column('classification', sa.Enum('confidential', 'internal', 'public', name='assetclassification'), nullable=False),
     sa.Column('condition', sa.Enum('good', 'fair', 'poor', 'decommissioned', name='assetcondition'), nullable=False),
+    sa.Column('brand', sqlmodel.sql.sqltypes.AutoString(length=50), nullable=False),
+    sa.Column('model', sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False),
     sa.Column('purchase_date', sa.Date(), nullable=True),
     sa.Column('warranty_expiry', sa.Date(), nullable=True),
     sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), nullable=False),
@@ -53,6 +54,7 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['directorate_id'], ['directorates.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_departments_directorate_id'), 'departments', ['directorate_id'], unique=False)
     op.create_index(op.f('ix_departments_name'), 'departments', ['name'], unique=True)
     op.create_table('staff',
     sa.Column('id', sa.UUID(), nullable=False),
@@ -71,27 +73,37 @@ def upgrade() -> None:
     sa.Column('password_changed_at', postgresql.TIMESTAMP(timezone=True), nullable=False),
     sa.Column('is_activated', sa.Boolean(), nullable=False),
     sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column('policy_acknowledged_at', postgresql.TIMESTAMP(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['department_id'], ['departments.id'], ),
     sa.ForeignKeyConstraint(['directorate_id'], ['directorates.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_staff_department_id'), 'staff', ['department_id'], unique=False)
+    op.create_index(op.f('ix_staff_directorate_id'), 'staff', ['directorate_id'], unique=False)
     op.create_index(op.f('ix_staff_email'), 'staff', ['email'], unique=True)
     op.create_index(op.f('ix_staff_personal_number'), 'staff', ['personal_number'], unique=True)
+    op.create_index(op.f('ix_staff_role'), 'staff', ['role'], unique=False)
     op.create_table('asset_allocations',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('asset_id', sa.Integer(), nullable=False),
     sa.Column('staff_id', sa.Uuid(), nullable=False),
+    sa.Column('allocated_by_id', sa.Uuid(), nullable=False),
     sa.Column('allocation_date', sa.Date(), nullable=False),
     sa.Column('return_date', sa.Date(), nullable=True),
     sa.Column('notes', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+    sa.ForeignKeyConstraint(['allocated_by_id'], ['staff.id'], ),
     sa.ForeignKeyConstraint(['asset_id'], ['assets.id'], ),
     sa.ForeignKeyConstraint(['staff_id'], ['staff.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_asset_allocations_allocated_by_id'), 'asset_allocations', ['allocated_by_id'], unique=False)
+    op.create_index(op.f('ix_asset_allocations_asset_id'), 'asset_allocations', ['asset_id'], unique=False)
+    op.create_index(op.f('ix_asset_allocations_return_date'), 'asset_allocations', ['return_date'], unique=False)
+    op.create_index(op.f('ix_asset_allocations_staff_id'), 'asset_allocations', ['staff_id'], unique=False)
     op.create_table('ict_personnel',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('staff_id', sa.Uuid(), nullable=False),
-    sa.Column('specialization', sa.Enum('hardware', 'networking', 'software_and_systems', 'security', 'other', name='specialization'), nullable=False),
+    sa.Column('specialization', sa.Enum('hardware', 'networking', 'software_and_systems', 'security', 'other', name='specialization'), nullable=True),
     sa.Column('availability', sa.Enum('available', 'busy', 'off_duty', 'on_leave', name='availability'), nullable=False),
     sa.Column('phone_extension', sqlmodel.sql.sqltypes.AutoString(length=10), nullable=True),
     sa.Column('is_active', sa.Boolean(), nullable=False),
@@ -99,6 +111,9 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('staff_id')
     )
+    op.create_index(op.f('ix_ict_personnel_availability'), 'ict_personnel', ['availability'], unique=False)
+    op.create_index(op.f('ix_ict_personnel_is_active'), 'ict_personnel', ['is_active'], unique=False)
+    op.create_index(op.f('ix_ict_personnel_specialization'), 'ict_personnel', ['specialization'], unique=False)
     op.create_table('magic_link_tokens',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('staff_id', sa.Uuid(), nullable=False),
@@ -108,7 +123,20 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['staff_id'], ['staff.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_magic_link_tokens_staff_id'), 'magic_link_tokens', ['staff_id'], unique=False)
     op.create_index(op.f('ix_magic_link_tokens_token'), 'magic_link_tokens', ['token'], unique=True)
+    op.create_table('password_reset_tokens',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('staff_id', sa.Uuid(), nullable=False),
+    sa.Column('token', sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False),
+    sa.Column('expires_at', postgresql.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column('used', sa.Boolean(), nullable=False),
+    sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['staff_id'], ['staff.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_password_reset_tokens_staff_id'), 'password_reset_tokens', ['staff_id'], unique=False)
+    op.create_index(op.f('ix_password_reset_tokens_token'), 'password_reset_tokens', ['token'], unique=True)
     op.create_table('sessions',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('staff_id', sa.Uuid(), nullable=False),
@@ -121,6 +149,10 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('token')
     )
+    op.create_index(op.f('ix_sessions_expires_at'), 'sessions', ['expires_at'], unique=False)
+    op.create_index(op.f('ix_sessions_is_active'), 'sessions', ['is_active'], unique=False)
+    op.create_index(op.f('ix_sessions_login_at'), 'sessions', ['login_at'], unique=False)
+    op.create_index(op.f('ix_sessions_staff_id'), 'sessions', ['staff_id'], unique=False)
     op.create_table('audit_logs',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('staff_id', sa.Uuid(), nullable=True),
@@ -135,6 +167,10 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['staff_id'], ['staff.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_audit_logs_action'), 'audit_logs', ['action'], unique=False)
+    op.create_index(op.f('ix_audit_logs_created_at'), 'audit_logs', ['created_at'], unique=False)
+    op.create_index(op.f('ix_audit_logs_session_id'), 'audit_logs', ['session_id'], unique=False)
+    op.create_index(op.f('ix_audit_logs_staff_id'), 'audit_logs', ['staff_id'], unique=False)
     op.create_index(op.f('ix_audit_logs_table_name'), 'audit_logs', ['table_name'], unique=False)
     op.create_table('tickets',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -143,8 +179,10 @@ def upgrade() -> None:
     sa.Column('title', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('description', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('category', sa.Enum('hardware', 'software', 'network', 'access_permissions', 'security_incidents', 'other', name='ticketcategory'), nullable=False),
-    sa.Column('status', sa.Enum('open', 'in_progress', 'resolved', 'unresolved', 'closed', name='ticketstatus'), nullable=False),
+    sa.Column('status', sa.Enum('open', 'in_progress', 'resolved', 'unresolved', 'pending_confirmation', 'reopened', 'closed', name='ticketstatus'), nullable=False),
     sa.Column('comment', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+    sa.Column('resolution_notes', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+    sa.Column('rejection_reason', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
     sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('closed_at', postgresql.TIMESTAMP(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['assigned_to_id'], ['ict_personnel.id'], ),
@@ -159,16 +197,39 @@ def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_table('tickets')
     op.drop_index(op.f('ix_audit_logs_table_name'), table_name='audit_logs')
+    op.drop_index(op.f('ix_audit_logs_staff_id'), table_name='audit_logs')
+    op.drop_index(op.f('ix_audit_logs_session_id'), table_name='audit_logs')
+    op.drop_index(op.f('ix_audit_logs_created_at'), table_name='audit_logs')
+    op.drop_index(op.f('ix_audit_logs_action'), table_name='audit_logs')
     op.drop_table('audit_logs')
+    op.drop_index(op.f('ix_sessions_staff_id'), table_name='sessions')
+    op.drop_index(op.f('ix_sessions_login_at'), table_name='sessions')
+    op.drop_index(op.f('ix_sessions_is_active'), table_name='sessions')
+    op.drop_index(op.f('ix_sessions_expires_at'), table_name='sessions')
     op.drop_table('sessions')
+    op.drop_index(op.f('ix_password_reset_tokens_token'), table_name='password_reset_tokens')
+    op.drop_index(op.f('ix_password_reset_tokens_staff_id'), table_name='password_reset_tokens')
+    op.drop_table('password_reset_tokens')
     op.drop_index(op.f('ix_magic_link_tokens_token'), table_name='magic_link_tokens')
+    op.drop_index(op.f('ix_magic_link_tokens_staff_id'), table_name='magic_link_tokens')
     op.drop_table('magic_link_tokens')
+    op.drop_index(op.f('ix_ict_personnel_specialization'), table_name='ict_personnel')
+    op.drop_index(op.f('ix_ict_personnel_is_active'), table_name='ict_personnel')
+    op.drop_index(op.f('ix_ict_personnel_availability'), table_name='ict_personnel')
     op.drop_table('ict_personnel')
+    op.drop_index(op.f('ix_asset_allocations_staff_id'), table_name='asset_allocations')
+    op.drop_index(op.f('ix_asset_allocations_return_date'), table_name='asset_allocations')
+    op.drop_index(op.f('ix_asset_allocations_asset_id'), table_name='asset_allocations')
+    op.drop_index(op.f('ix_asset_allocations_allocated_by_id'), table_name='asset_allocations')
     op.drop_table('asset_allocations')
+    op.drop_index(op.f('ix_staff_role'), table_name='staff')
     op.drop_index(op.f('ix_staff_personal_number'), table_name='staff')
     op.drop_index(op.f('ix_staff_email'), table_name='staff')
+    op.drop_index(op.f('ix_staff_directorate_id'), table_name='staff')
+    op.drop_index(op.f('ix_staff_department_id'), table_name='staff')
     op.drop_table('staff')
     op.drop_index(op.f('ix_departments_name'), table_name='departments')
+    op.drop_index(op.f('ix_departments_directorate_id'), table_name='departments')
     op.drop_table('departments')
     op.drop_index(op.f('ix_directorates_name'), table_name='directorates')
     op.drop_table('directorates')

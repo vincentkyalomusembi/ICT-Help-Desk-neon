@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import update
 from sqlalchemy.orm import selectinload
 from app.auth.model import Session as DBSession
 from app.auth.schemas import LoginRequest
@@ -53,6 +54,7 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
         staff.failed_attempts += 1
         if staff.failed_attempts >= 5:
             staff.locked_until = datetime.now(timezone.utc) + timedelta(minutes=settings.LOCKOUT_DURATION_MINUTES)
+        db.add(staff)
         await db.commit()
         remaining = max(0, 5 - staff.failed_attempts)
         detail = (
@@ -80,17 +82,20 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
 
     staff.failed_attempts = 0
     staff.locked_until = None
-    await db.commit()
+    db.add(staff)
 
-    # Deactivate any existing active sessions for this staff member
-    existing = await db.execute(
-        select(DBSession).where(
+    # Deactivate any existing active sessions for this staff member — single
+    # bulk UPDATE instead of loading each row and mutating it individually.
+    await db.execute(
+        update(DBSession)
+        .where(
             DBSession.staff_id == staff.id,
             DBSession.is_active == True,
         )
+        .values(is_active=False)
     )
-    for s in existing.scalars().all():
-        s.is_active = False
+
+    # Single commit for both the attempts reset and session deactivation
     await db.commit()
 
     now = datetime.now(timezone.utc)
@@ -103,8 +108,7 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
         is_active=True,
     )
     db.add(session)
-    await db.commit()
-    await db.refresh(session)
+    await db.flush()   # get session.id without committing yet
 
     await audit_service.create(
         session=db,
@@ -117,6 +121,9 @@ async def login(db: AsyncSession, payload: LoginRequest, request: Request) -> di
         ),
         user_session=session,
     )
+
+    await db.commit()   # one final commit for session + audit log
+    await db.refresh(session)
 
     return {
         "message": "Login successful.",

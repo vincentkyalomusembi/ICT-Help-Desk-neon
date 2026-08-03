@@ -1,7 +1,7 @@
 import secrets
 from datetime import datetime, timezone, timedelta
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -12,7 +12,7 @@ from app.core.security import hash_password
 from app.core.email import send_password_reset
 
 
-async def request_password_reset(db: AsyncSession, email: str) -> None:
+async def request_password_reset(db: AsyncSession, background_tasks: BackgroundTasks, email: str) -> None:
     result = await db.execute(select(Staff).where(Staff.email == email))
     staff = result.scalar_one_or_none()
 
@@ -40,7 +40,7 @@ async def request_password_reset(db: AsyncSession, email: str) -> None:
     db.add(record)
     await db.commit()
 
-    await send_password_reset(staff.email, staff.full_name, token)
+    background_tasks.add_task(send_password_reset, staff.email, staff.full_name, token)
 
 
 async def reset_password(db: AsyncSession, token: str, new_password: str) -> None:
