@@ -1,7 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter, Depends
-from fastapi import HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -16,7 +15,7 @@ router = APIRouter(prefix="/audit", tags=["Audit"])
 async def list_audit_logs(
     _: AdminStaff,
     skip: int = 0,
-    limit: int = 500,
+    limit: int = Query(default=50, le=200),
     session: AsyncSession = Depends(get_db),
 ):
     return await audit_service.list(session, skip, limit)
