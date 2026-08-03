@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import CurrentStaff, IctStaff, AdminStaff
@@ -19,8 +19,13 @@ async def allocate_asset(data: AssetAllocationCreate, current: IctStaff, db: Asy
 
 
 @router.get("/allocations", response_model=list[AssetAllocationResponse])
-async def get_all_allocations(_: CurrentStaff, db: AsyncSession = Depends(get_db)):
-    return await service.get_all_allocations(db)
+async def get_all_allocations(
+    _: CurrentStaff,
+    skip: int = 0,
+    limit: int = Query(default=50, le=200),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_all_allocations(db, skip, limit)
 
 
 @router.get("/allocations/{allocation_id}", response_model=AssetAllocationResponse)
@@ -47,8 +52,13 @@ async def create_asset(data: AssetCreate, _: IctStaff, db: AsyncSession = Depend
 
 
 @router.get("/", response_model=list[AssetResponse])
-async def get_all_assets(_: CurrentStaff, db: AsyncSession = Depends(get_db)):
-    return await service.get_all_assets(db)
+async def get_all_assets(
+    _: CurrentStaff,
+    skip: int = 0,
+    limit: int = Query(default=50, le=200),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_all_assets(db, skip, limit)
 
 
 @router.get("/{asset_id}", response_model=AssetResponse)
