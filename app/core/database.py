@@ -27,14 +27,12 @@ if raw:
     engine = create_async_engine(
         DATABASE_URL,
         echo=getattr(settings, "DEBUG", False),
-        connect_args={
-            "ssl": "require",
-            "statement_cache_size": 0,   # this one is real and sufficient
-        },
-        pool_pre_ping=True,
-        pool_size=20,
-        max_overflow=3,
-        pool_recycle=180,
+        connect_args={"ssl": "require"},
+        pool_pre_ping=False,
+        pool_size=5,
+        max_overflow=5,
+        pool_recycle=1800,
+        pool_timeout=5,
     )
 
     AsyncSessionLocal = sessionmaker(
