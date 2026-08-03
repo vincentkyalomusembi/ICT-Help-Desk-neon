@@ -3,7 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 
 from app.core.database import get_db
-from app.core.dependencies import CurrentStaff, IctStaff, AdminStaff, CurrentSession
+from app.core.dependencies import (
+    CurrentStaff, IctStaff, AdminStaff, CurrentSession,
+    StaffWithIctProfile, IctStaffWithProfile,
+)
 from app.tickets.service import (
     create_ticket, get_ticket, list_tickets, list_queued_tickets,
     list_team_unresolved, list_pending_confirmation,
@@ -122,7 +125,7 @@ async def my_pending_confirmation(
 
 @router.get("/", response_model=List[TicketResponse])
 async def read_all(
-    current_staff: CurrentStaff,
+    current_staff: StaffWithIctProfile,
     skip: int = 0,
     limit: int = 50,
     mine_only: bool = False,
@@ -148,7 +151,7 @@ async def read_all(
 @router.get("/{ticket_id}", response_model=TicketResponse)
 async def read(
     ticket_id: int,
-    current_staff: CurrentStaff,
+    current_staff: StaffWithIctProfile,
     current_session: CurrentSession,
     session: AsyncSession = Depends(get_db),
 ):
@@ -171,7 +174,7 @@ async def read(
 async def update(
     ticket_id: int,
     ticket: TicketUpdate,
-    current_staff: IctStaff,
+    current_staff: IctStaffWithProfile,
     current_session: CurrentSession,
     session: AsyncSession = Depends(get_db),
 ):
@@ -225,7 +228,7 @@ async def confirm(
 @router.post("/{ticket_id}/pickup", response_model=TicketResponse)
 async def pickup(
     ticket_id: int,
-    current_staff: IctStaff,
+    current_staff: IctStaffWithProfile,
     current_session: CurrentSession,
     session: AsyncSession = Depends(get_db),
 ):
