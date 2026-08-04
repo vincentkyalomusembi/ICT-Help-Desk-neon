@@ -343,7 +343,7 @@ class StaffService:
         self.session.add(staff)
         await self.session.commit()
         await self.session.refresh(staff)
-        return staff
+        return await self.get_staff_by_id(staff_id)
 
     async def delete_staff(self, staff_id: UUID) -> None:
         staff = await self._get_or_404(staff_id)
@@ -369,7 +369,7 @@ class StaffService:
         self.session.add(staff)
         await self.session.commit()
         await self.session.refresh(staff)
-        return staff
+        return await self.get_staff_by_id(staff_id)
 
     async def record_failed_attempt(
         self,

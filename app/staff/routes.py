@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, status, HTTPException, Request, B
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_staff, AdminStaff
+from app.core.dependencies import StaffWithDepartment, AdminStaff
 from app.core.limiter import limiter
 from app.staff.model import Staff, UserRole
 from app.staff.schemas import (
@@ -50,7 +50,7 @@ async def list_staff(
 
 
 @staff_router.get("/me", response_model=StaffResponse, summary="Get the currently authenticated staff member")
-async def get_me(current: Staff = Depends(get_current_staff)):
+async def get_me(current: StaffWithDepartment):
     return current
 
 
