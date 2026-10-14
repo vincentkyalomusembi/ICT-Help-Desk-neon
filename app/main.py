@@ -28,9 +28,11 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",    # React default
-        "http://localhost:5173",    # Vite default
-        "https://ict-help-desk-frontend.vercel.app",  # Production URL
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://ict-help-desk-frontend.vercel.app",
+        "http://SERVER_IP",           # replace SERVER_IP with actual IP e.g. http://192.168.1.50
+        "http://SERVER_IP:80",
     ],
     allow_credentials=True,
     allow_methods=["*"],

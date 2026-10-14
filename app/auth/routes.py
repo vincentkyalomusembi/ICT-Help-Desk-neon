@@ -35,8 +35,8 @@ async def login(
         key="session_id",
         value=result["token"],
         httponly=True,
-        secure=True,
-        samesite="none",
+        secure=False,
+        samesite="lax",
         max_age=settings.SESSION_EXPIRE_MINUTES * 60,
     )
 
