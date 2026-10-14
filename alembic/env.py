@@ -26,6 +26,25 @@ DATABASE_URL = settings.DATABASE_URL.replace("?sslmode=require", "")
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 
+# Indexes that are hand-written directly in migration files and not
+# declared via SQLModel Field(index=True) — Alembic's autogenerate
+# can't see these in the model metadata, so it always proposes
+# dropping them on every future autogenerate run. This filter tells
+# autogenerate to skip comparing them entirely.
+HAND_WRITTEN_INDEXES = {
+    "ix_active_allocation_per_asset",
+    "ix_ict_personnel_triage_lookup",
+    "ix_tickets_assigned_to_status",
+    "ix_tickets_status_created_at",
+}
+
+
+def include_object(object, name, type_, reflected, compare_to):
+    if type_ == "index" and name in HAND_WRITTEN_INDEXES:
+        return False
+    return True
+
+
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -33,6 +52,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -41,7 +61,8 @@ def run_migrations_offline() -> None:
 def do_run_migrations(connection):
     context.configure(
         connection=connection,
-        target_metadata=target_metadata
+        target_metadata=target_metadata,
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()

@@ -1,39 +1,64 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
-from sqlalchemy.engine import make_url
 from app.core.config import settings
+import re
+import logging
+from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
-raw_database_url = settings.DATABASE_URL.replace("?sslmode=require", "")
-parsed_url = make_url(raw_database_url)
+logger = logging.getLogger(__name__)
 
-if parsed_url.drivername == "postgresql":
-    parsed_url = parsed_url.set(drivername="postgresql+asyncpg")
+raw = settings.DATABASE_URL
 
-DATABASE_URL = str(parsed_url)
+engine = None
+AsyncSessionLocal = None
+DATABASE_URL = None
 
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=True,
-    connect_args={"ssl": "require"}
-)
+if raw:
+    normalized = re.sub(r"^postgresql:", "postgresql+asyncpg:", raw)
+    p = urlparse(normalized)
+    qs = dict(parse_qsl(p.query))
+    qs.pop("sslmode", None)
+    qs.pop("channel_binding", None)
+    clean = urlunparse(
+        p._replace(query=urlencode(qs))
+    )
+    DATABASE_URL = clean
+    engine = create_async_engine(
+        DATABASE_URL,
+        echo=getattr(settings, "DEBUG", False),
+        connect_args={"ssl": "require"},
+        pool_pre_ping=False,
+        pool_size=5,
+        max_overflow=5,
+        pool_recycle=1800,
+        pool_timeout=5,
+    )
 
-AsyncSessionLocal = sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False
-)
+    AsyncSessionLocal = sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False
+    )
 
-Base = declarative_base()
 
 async def get_db():
+    if AsyncSessionLocal is None:
+        raise RuntimeError(
+            "Database is not configured. Set DATABASE_URL in .env"
+        )
     async with AsyncSessionLocal() as session:
         yield session
 
+
 async def check_db_connection():
+    if engine is None:
+        logger.warning("Database is not configured. Skipping connection check")
+        return
     try:
         async with engine.connect() as connection:
             await connection.execute(text("SELECT 1"))
-        print("Database connected successfully")
+        logger.info("Database connected successfully")
     except Exception as e:
-        print(f"Connection failed: {e}")
+        logger.error(f"Database connection failed: {e}")
+        raise
